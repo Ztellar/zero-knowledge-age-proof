@@ -1,0 +1,11 @@
+[package]
+name = "age-core"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Verifies a Chilean ID chip (CSCA -> DSC -> SOD -> DG1) and checks age, inside or outside a zkVM"
+
+[dependencies]
+rsa = { version = "=0.9.9", default-features = false, features = ["sha2"] }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+sha2 = { version = "=0.10.9", default-features = false }
