@@ -129,6 +129,16 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    cédula real: prueba de 223.770 B en 94,2 s (no se registró si la app estaba en
    pantalla), clave en software con la semilla cifrada por una clave AES en StrongBox,
    firma de 3.309 B en 116 ms (una sola medición, incluye la primera carga de clases).
+   **Android 17** (2026-10-26): emulador API 37 arm64 con páginas de 16 KB y 8 GB de RAM.
+   La librería ya está alineada a 16 KB (`LOAD` con `0x4000`, NDK r30) y la prueba de la
+   cédula de prueba corre dentro del proceso de la app en 100,9 s con `VmHWM` 2.618.208 kB
+   (test instrumentado `NativeProverTest`). Android 17 agrega un límite de memoria por app
+   según la RAM del teléfono (`MemoryLimiter:AnonSwap`); en el emulador está desactivado,
+   así que **no se sabe si los ~2,6 GB caben bajo el límite del S25**. La clave ML-DSA y la
+   migración desde software están en la decisión 0004. Los tests instrumentados borran
+   claves y desinstalan la app: correrlos sólo con `ANDROID_SERIAL` apuntando a un
+   emulador. La app sigue con `targetSdk` 36; subirlo a 37 exige, entre otras cosas, el
+   permiso de red local si la etapa 5 habla con el verificador por Wi-Fi.
    **Falta:** la librería pesa 87 MB y la APK de debug 134 MB.
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
@@ -140,6 +150,7 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
 | Riesgo | Qué pasa si se cumple |
 | --- | --- |
 | RISC Zero no compila o no corre en Android | Descartado en la etapa 2: corre en el S25 |
+| Android 17 mata la app por su límite de memoria por app mientras prueba | Sin medir: el emulador no aplica el límite; se verá en el S25 con Android 17 (`am memory-limiter status`) |
 | Generar la prueba tarda minutos en el teléfono | Tarda 65 s en el S25; un teléfono de gama media puede tardar más o quedarse sin memoria (sin medir) |
 | La prueba pesa demasiado para un QR | El verificador la recibe por archivo o por red en la primera versión |
 | Leer datos reales de cédulas en tests | Los tests usan sólo documentos de prueba; la cédula real sólo en el teléfono de desarrollo |

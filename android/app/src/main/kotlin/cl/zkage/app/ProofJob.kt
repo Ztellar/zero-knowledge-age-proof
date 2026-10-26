@@ -66,10 +66,12 @@ object ProofJob {
         pending = null
         val started = (state.value as? State.Running)?.startedAt ?: System.currentTimeMillis()
         val result = try {
-            val key = DeviceKey.getOrCreate(context)
+            val key = DeviceKey.forNewProof(context)
             val proof = NativeProver.prove(input.csca.spki(), input.sod, input.dg1, LocalDate.now(ZoneOffset.UTC), 18, key.spkiSha256)
             // No personal data in it: only the CSCA hash, the date and the threshold are public.
             File(context.filesDir, "age-proof.bin").writeBytes(proof.raw)
+            // Only now: if proving had failed, the previous proof and its key stay usable.
+            DeviceKey.retireOthers(context, key)
             val label = ChileCsca.keys.firstOrNull { it.spkiSha256().contentEquals(proof.claim.cscaSha256) }?.label
             val seconds = (System.currentTimeMillis() - started) / 1000.0
             State.Done(proof, seconds, label ?: "desconocida", samplePresentation(key, proof))

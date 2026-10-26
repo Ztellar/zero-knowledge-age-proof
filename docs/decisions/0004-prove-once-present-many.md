@@ -57,10 +57,18 @@ Formas de cerrarlo, ambas fuera de la primera versión:
   ML-DSA desde la API 37 (`KeyProperties.KEY_ALGORITHM_ML_DSA_65`, "Added in API level 37"
   en la referencia de Android); el S25 está en la API 36. La app
   ([`DeviceKey`](../../android/app/src/main/kotlin/cl/zkage/app/DeviceKey.kt)) usa el
-  Keystore en API 37+ (**sin probar**: no hay un teléfono con API 37 a mano) y, si no,
+  Keystore en API 37+ y, si no,
   genera la clave ML-DSA-65 con Bouncy Castle desde una semilla de 32 bytes guardada cifrada
   con AES-256-GCM del Keystore. En el S25 esa clave AES quedó en StrongBox. Costo: al firmar,
   la clave está en la memoria de la app; la semilla cifrada no sirve en otro teléfono.
+  **Android 17** (el S25 lo recibirá): la prueba guardada y su clave en software siguen
+  sirviendo tras la actualización; la siguiente prueba usa una clave del Keystore y recién
+  cuando queda guardada se borra la de software. La app elige la clave por el hash que
+  trae la prueba, así que una prueba fallida a mitad del cambio no rompe la anterior. En el
+  emulador de Android 17 la KeyMint es `SoftKeymaster`, que no genera ML-DSA
+  (`TRANSACTION_FAILED` con `Algorithm(ML_DSA)`, `MlDsaVariant(ML_DSA_65)`): la app vuelve a
+  software y dice por qué. **La rama del Keystore sigue sin probarse en un teléfono con
+  ML-DSA**, ni la migración; se verá en el S25 con Android 17.
   El journal publica el SHA-256 de la clave pública (SubjectPublicKeyInfo DER), no la
   clave entera (1.974 B): la presentación la manda junto con la firma.
 - **Vigencia de la prueba.** El journal trae la fecha en que se generó. Cuánto tiempo la
