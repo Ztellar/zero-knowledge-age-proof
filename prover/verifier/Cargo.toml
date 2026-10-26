@@ -1,0 +1,14 @@
+[package]
+name = "age-verifier"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Verifies an age presentation: the stored STARK proof plus an ML-DSA-65 signature of the verifier's challenge"
+
+[dependencies]
+age-core = { path = "../core" }
+bincode = "1"
+methods = { path = "../methods" }
+ml-dsa = "=0.1.1"
+risc0-zkvm = { version = "^3.0.6", default-features = false, features = ["std"] }
+sha2 = "=0.10.9"

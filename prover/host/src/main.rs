@@ -5,6 +5,9 @@
 //! On Android, build with `--features prove` (no `r0vm` there) and point `FIXTURES_DIR` at
 //! the pushed fixtures.
 //!
+//! With `RECEIPT_OUT=<path>`, `succinct` also writes the receipt there (bincode), bound to
+//! the demo device key below: the verifier's tests use it.
+//!
 //! `execute` only runs the guest (cycle count, no proof). `composite` is RISC Zero's
 //! default receipt, one STARK per segment. `succinct` compresses it into a single STARK.
 //! Neither is wrapped in Groth16, which would not be post-quantum.
@@ -15,6 +18,9 @@ use std::{env, fs};
 
 use age_core::{Claim, Date, Inputs};
 use methods::{AGE_GUEST_ELF, AGE_GUEST_ID};
+use ml_dsa::pkcs8::EncodePublicKey;
+use ml_dsa::{Keypair, MlDsa65, SigningKey};
+use sha2::{Digest, Sha256};
 use risc0_zkvm::{default_executor, default_prover, ExecutorEnv, ProverOpts};
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -25,6 +31,9 @@ fn fixture(name: &str) -> Vec<u8> {
     fs::read(&path).unwrap_or_else(|e| panic!("{}: {e} (run fixtures/gen.py first)", path.display()))
 }
 
+/// Seed of the ML-DSA-65 key that stands in for a phone's. Public on purpose: test data only.
+pub const DEMO_DEVICE_SEED: [u8; 32] = [0x5e; 32];
+
 fn main() {
     let mode = env::args().nth(1).unwrap_or_else(|| "succinct".into());
     let inputs = Inputs {
@@ -33,8 +42,7 @@ fn main() {
         dg1: fixture("dg1.bin"),
         today: Date { year: 2026, month: 10, day: 22 },
         min_age: 18,
-        // Stands in for the phone's ML-DSA key; only its hash enters the proof.
-        device_key_sha256: [0xd0; 32],
+        device_key_sha256: Sha256::digest(demo_device_spki()).into(),
     };
     // Smaller segments trade proving time for peak memory, which matters on phones.
     let mut builder = ExecutorEnv::builder();
@@ -78,4 +86,13 @@ fn main() {
     println!("verify time: {verify_time:.2?}");
     println!("receipt size: {} bytes", bytes.len());
     println!("claim: {claim:?}");
+    if let ("succinct", Some(path)) = (mode.as_str(), env::var_os("RECEIPT_OUT")) {
+        fs::write(&path, &bytes).unwrap();
+        println!("receipt written to {}", PathBuf::from(path).display());
+    }
+}
+
+fn demo_device_spki() -> Vec<u8> {
+    let key = SigningKey::<MlDsa65>::from_seed(&DEMO_DEVICE_SEED.into());
+    key.verifying_key().to_public_key_der().unwrap().into_vec()
 }

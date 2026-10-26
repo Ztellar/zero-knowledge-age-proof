@@ -37,6 +37,14 @@ class MlDsaTest {
         assertArrayEquals(key.spki, again.spki)
     }
 
+    /** Same seed, same key as the Rust verifier's `ml-dsa` crate (FIPS 204 KeyGen_internal). */
+    @Test
+    fun rustSeedMatches() {
+        val expected = java.io.File("../../prover/verifier/tests/seed-00-1f.sha256").readText().trim()
+        val hex = MlDsa.spkiSha256(key.spki).joinToString("") { "%02x".format(it) }
+        assertEquals(expected, hex)
+    }
+
     /** Interop with a JCA `Signature("ML-DSA")`, the API the Android Keystore exposes. */
     @Test
     fun matchesJcaEncodingAndSignatures() {

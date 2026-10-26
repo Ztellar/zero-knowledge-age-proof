@@ -144,6 +144,16 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la
    0004 y un artículo corto.
+   Transporte: servidor web con QR ([decisión 0005](decisions/0005-web-verifier-with-qr.md)).
+   **Librería del verificador hecha** (2026-10-26,
+   [`prover/verifier`](../prover/verifier/src/lib.rs)): comprueba el recibo contra el image
+   ID, la CSCA, la edad mínima, la vigencia (12 meses por defecto), el hash de la clave del
+   teléfono y la firma ML-DSA-65 de `"zkage-presentation-v1" || origen || desafío`. Tests con
+   un recibo de la cédula de prueba ligado a una clave de demo de semilla fija; un rechazo
+   por cada comprobación. Verificar el recibo tarda 12,52 ms en el Mac (una medición).
+   Bouncy Castle y el crate `ml-dsa` derivan la misma clave de la misma semilla (test en
+   ambos lados). **Falta:** la lista de CSCAs de Chile del lado de Rust, el servidor web
+   con QR, el escáner y el envío en la app, y el README.
 
 ## Riesgos
 
