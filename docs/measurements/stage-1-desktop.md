@@ -15,6 +15,11 @@ generada por [el generador de fixtures](../../prover/fixtures/gen.py):
 `rsa` 0.9.9 y `sha2` 0.10.9 usan los forks acelerados de RISC Zero (verificado en
 [`prover/methods/guest/Cargo.lock`](../../prover/methods/guest/Cargo.lock)). Ciclos del programa: **975.995**.
 
+
+Para reproducirla: la cédula de prueba por omisión ahora usa los tamaños de clave reales
+(3072/2048); esta medición usó `gen.py --csca-bits 4096 --dsc-bits 4096`. Ver
+[tamaños de clave](chile-key-sizes.md).
+
 ## Resultados iniciales
 
 Primera versión: ASN.1 con `cms` y `x509-cert`, entradas con el serializador por defecto.

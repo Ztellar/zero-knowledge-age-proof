@@ -95,6 +95,9 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    y en segundo plano. La prueba incluye en su journal una clave pública ML-DSA del
    teléfono ([decisión 0004](decisions/0004-prove-once-present-many.md)).
    *Salida:* prueba generada a partir de una cédula real, sin red, y guardada en la app.
+   Antes de partir: la cédula de prueba ahora usa los tamaños de clave reales (CSCA RSA
+   3072, DSC RSA 2048); en el S25 la prueba sucinta tarda 58–65 s con 2,46 GB
+   ([tamaños de clave y medición](measurements/chile-key-sizes.md)).
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la

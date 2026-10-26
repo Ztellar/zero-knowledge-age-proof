@@ -3,17 +3,22 @@
 Everything here is test data signed with throwaway keys. No real person or real
 Registro Civil key is involved. Run from anywhere:
 
-    python3 -I prover/fixtures/gen.py
+    python3 -I prover/fixtures/gen.py [--csca-bits 3072] [--dsc-bits 2048]
+
+The defaults match a real card issued in 2023: a DSC with RSA 2048 signed by the 2021
+CSCA with RSA 3072. The stage 1 and 2 measurements used 4096 for both
+(`--csca-bits 4096 --dsc-bits 4096`), the size of Chile's 2024 CSCA.
 
 Outputs, next to this script in `out/`:
-    csca.der  - self-signed test CSCA certificate (RSA 4096)
-    dsc.der   - test DSC certificate signed by the CSCA (RSA 4096)
+    csca.der  - self-signed test CSCA certificate (RSA, --csca-bits)
+    dsc.der   - test DSC certificate signed by the CSCA (RSA, --dsc-bits)
     dg1.bin   - DG1 data group (tag 0x61 wrapping the 90-char TD1 MRZ)
     sod.der   - SOD: CMS SignedData over an LDSSecurityObject with the DG1 hash
 
 Private keys go to `keys/`, which is git-ignored.
 """
 
+import argparse
 import hashlib
 import subprocess
 import sys
@@ -115,12 +120,13 @@ def openssl(*args: str) -> None:
     subprocess.run(["openssl", *args], check=True, capture_output=True)
 
 
-def make_chain() -> None:
-    csca_key, dsc_key = KEYS / "csca.key", KEYS / "dsc.key"
+def make_chain(csca_bits: int, dsc_bits: int) -> Path:
+    """Returns the DSC private key. Keys are cached per size, so reruns stay stable."""
+    csca_key, dsc_key = KEYS / f"csca-{csca_bits}.key", KEYS / f"dsc-{dsc_bits}.key"
     if not csca_key.exists():
-        openssl("genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:4096", "-out", str(csca_key))
+        openssl("genpkey", "-algorithm", "RSA", "-pkeyopt", f"rsa_keygen_bits:{csca_bits}", "-out", str(csca_key))
     if not dsc_key.exists():
-        openssl("genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:4096", "-out", str(dsc_key))
+        openssl("genpkey", "-algorithm", "RSA", "-pkeyopt", f"rsa_keygen_bits:{dsc_bits}", "-out", str(dsc_key))
 
     csca_pem, dsc_csr, dsc_pem = KEYS / "csca.pem", KEYS / "dsc.csr", KEYS / "dsc.pem"
     openssl("req", "-x509", "-new", "-key", str(csca_key), "-sha256", "-days", "3650",
@@ -136,25 +142,31 @@ def make_chain() -> None:
             "-CAcreateserial", "-sha256", "-days", "1825", "-extfile", str(ext), "-out", str(dsc_pem))
     openssl("x509", "-in", str(csca_pem), "-outform", "DER", "-out", str(OUT / "csca.der"))
     openssl("x509", "-in", str(dsc_pem), "-outform", "DER", "-out", str(OUT / "dsc.der"))
+    return dsc_key
 
 
-def make_sod(lds: bytes) -> None:
+def make_sod(lds: bytes, dsc_key: Path) -> None:
     lds_path = KEYS / "lds.der"
     lds_path.write_bytes(lds)
     openssl("cms", "-sign", "-binary", "-nodetach", "-nosmimecap",
             "-in", str(lds_path), "-outform", "DER", "-out", str(OUT / "sod.der"),
             "-econtent_type", OID_LDS_SECURITY_OBJECT, "-md", "sha256",
-            "-signer", str(KEYS / "dsc.pem"), "-inkey", str(KEYS / "dsc.key"))
+            "-signer", str(KEYS / "dsc.pem"), "-inkey", str(dsc_key))
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--csca-bits", type=int, default=3072)
+    parser.add_argument("--dsc-bits", type=int, default=2048)
+    args = parser.parse_args()
     OUT.mkdir(exist_ok=True)
     KEYS.mkdir(exist_ok=True)
     mrz = td1_mrz()
     dg1 = dg1_bytes(mrz)
     (OUT / "dg1.bin").write_bytes(dg1)
-    make_chain()
-    make_sod(lds_security_object(dg1))
+    dsc_key = make_chain(args.csca_bits, args.dsc_bits)
+    make_sod(lds_security_object(dg1), dsc_key)
+    print(f"CSCA RSA {args.csca_bits}, DSC RSA {args.dsc_bits}")
     print("MRZ:")
     for i in range(0, 90, 30):
         print("  " + mrz[i:i + 30])

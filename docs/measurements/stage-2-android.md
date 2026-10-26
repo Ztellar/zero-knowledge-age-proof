@@ -11,6 +11,11 @@ Lo mismo que en la [etapa 1](stage-1-desktop.md), con el guest ya optimizado: la
 prueba, edad de 18 años o más el 2026-10-22, documento vigente. Mismos ciclos que en el
 Mac: 198.377 del programa, 262.144 en total, un segmento.
 
+
+Para reproducirla: la cédula de prueba por omisión ahora usa los tamaños de clave reales
+(3072/2048); esta medición usó `gen.py --csca-bits 4096 --dsc-bits 4096`. Ver
+[tamaños de clave](chile-key-sizes.md).
+
 ## Resultados
 
 | Recibo | Corrida | Tiempo de prueba | RAM máxima | Tamaño | Verificación |

@@ -34,7 +34,7 @@ class SodVerifierTest {
         assertTrue(report.adult)
         assertEquals("SHA256", report.dataGroupHashAlgorithm)
         assertEquals("SHA256WITHRSA", report.dscSignatureAlgorithm)
-        assertEquals(4096, report.dscKeyBits)
+        assertEquals(2048, report.dscKeyBits)
     }
 
     @Test

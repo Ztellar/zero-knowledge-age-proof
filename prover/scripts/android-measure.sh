@@ -26,7 +26,9 @@ adb push "$here"/fixtures/out/csca.der "$here"/fixtures/out/sod.der \
 
 # Polls VmHWM every 0.5 s while the prover runs; the kernel keeps the peak, so the last
 # reading is the process maximum.
-adb shell "cd $remote && chmod +x host && \
+# `./host` must be the backgrounded command itself: backgrounding a `&&` chain would make
+# `$!` a subshell, and VmHWM would read that shell's few kB instead of the prover's.
+adb shell "cd $remote && chmod +x host; \
     LD_LIBRARY_PATH=$remote FIXTURES_DIR=$remote/fixtures ./host $mode > out.txt 2>&1 & \
     pid=\$!; hwm=0; \
     while kill -0 \$pid 2>/dev/null; do \
