@@ -4,7 +4,8 @@ Fecha: 2026-10-22.
 
 Estado: **etapa 4 en curso** (2026-10-26): el probador corre en el computador y en el S25 con
 una cédula de prueba; resultados en `measurements/stage-1-desktop.md` y
-`measurements/stage-2-android.md`. La app lee la cédula real, verifica sus firmas y genera la prueba STARK en el teléfono.
+`measurements/stage-2-android.md`. La app lee la cédula real, verifica sus firmas y genera la prueba STARK en el teléfono,
+en un servicio en segundo plano (135 s fuera de la app, 51,5 s con la app en pantalla).
 
 ## Objetivo
 
@@ -108,9 +109,18 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    teléfono, con el `Claim` apuntando a la CSCA CHL 2021. La app llegó a `VmHWM`
    2.476.448 kB (2,54 GB) y Android no la cerró; una sola corrida, con la app en primer
    plano y la pantalla encendida.
-   **Falta:** clave ML-DSA en el journal; correr en un servicio en segundo plano (hoy
-   corre en la actividad y se pierde si el usuario sale de la app); la librería pesa
-   87 MB y la APK de debug 134 MB.
+   **Servicio en segundo plano hecho** (2026-10-26): la prueba corre en un servicio en
+   primer plano de tipo `specialUse` ([`ProverService`](../android/app/src/main/kotlin/cl/zkage/app/ProverService.kt))
+   con un wake lock, una notificación con cronómetro y otra al terminar. Probado con la
+   cédula real saliendo de la app: terminó en **135 s** (el monitor de `adb` vio el servicio
+   activo de 09:16:49 a 09:19:05, 136 s), con `VmHWM` 2.588.748 kB (2,59 GB) y sin cierres.
+   Tarda 2,6 veces más que en la actividad (135 / 51,5). Causa probable, **sin verificar**:
+   en este teléfono el cpuset `foreground` (el de un servicio en primer plano) usa los
+   núcleos 0–5 (3,53 GHz) y deja fuera los dos de 4,47 GHz que sí tiene `top-app`
+   (0–7); el cpuset `background` usa sólo 0–1 y 4–5. No se midió en qué cpuset quedó el
+   proceso durante la corrida. Una sola corrida; no se confirmó que tocar la notificación
+   abra el resultado.
+   **Falta:** clave ML-DSA en el journal; la librería pesa 87 MB y la APK de debug 134 MB.
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la
