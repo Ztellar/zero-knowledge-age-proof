@@ -152,8 +152,18 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    un recibo de la cédula de prueba ligado a una clave de demo de semilla fija; un rechazo
    por cada comprobación. Verificar el recibo tarda 12,52 ms en el Mac (una medición).
    Bouncy Castle y el crate `ml-dsa` derivan la misma clave de la misma semilla (test en
-   ambos lados). **Falta:** la lista de CSCAs de Chile del lado de Rust, el servidor web
-   con QR, el escáner y el envío en la app, y el README.
+   ambos lados).
+   **Verificador web hecho** (2026-10-26): lista de CSCAs de Chile en Rust generada por
+   `gen_csca.py --rust` (comparada con Kotlin en un test), servidor
+   [`prover/verifier-web`](../prover/verifier-web/src/main.rs) con QR y certificado fijado,
+   y en la app escaneo del QR, confirmación del origen y envío. Con la cédula de prueba y
+   `curl`: aceptada en 30 ms ida y vuelta; firma para otro origen y segunda respuesta,
+   rechazadas. **Con la cédula real en el S25: aceptada** ("Mayor de 18, cédula firmada
+   por CHL 2021 RSA3072, prueba del 2026-10-26"). Demo:
+   `adb reverse tcp:8443 tcp:8443` y `cargo run --release -p verifier-web -- --host 127.0.0.1`.
+   La app también muestra qué data groups firma el SOD, para saber si la cédula trae
+   Active Authentication (DG15); **falta leerlo en una cédula real.**
+   **Falta:** el README.
 
 ## Riesgos
 

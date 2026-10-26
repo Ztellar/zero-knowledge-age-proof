@@ -10,6 +10,10 @@
 //! 5. the device public key hashes to the one in the claim;
 //! 6. the device key signed this verifier's origin and challenge.
 
+mod chile_csca;
+
+pub use chile_csca::CHILE_CSCAS;
+
 use age_core::{Claim, Date};
 use methods::AGE_GUEST_ID;
 use ml_dsa::pkcs8::DecodePublicKey;
@@ -144,5 +148,13 @@ mod tests {
         assert!(message.starts_with(b"zkage-presentation-v1\0\0\x11https://a.example"));
         assert!(message.ends_with(&challenge));
         assert_ne!(message, presentation_message("https://b.example", &challenge));
+    }
+
+    /// The app builds the same bytes (`PresentationTest` in Kotlin checks this vector).
+    #[test]
+    fn message_vector() {
+        let message = presentation_message("https://192.168.1.5:8443", &[7; 32]);
+        let hex: String = message.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, include_str!("../tests/message-vector.hex").trim());
     }
 }

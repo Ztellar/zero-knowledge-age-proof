@@ -34,6 +34,11 @@ data class Report(
     val csca: CscaKey?,
     val dg1HashValid: Boolean,
     val dataGroupHashAlgorithm: String,
+    /**
+     * Numbers of the data groups the SOD signs, sorted. Says which security features the
+     * chip has: DG14 means Chip Authentication, DG15 Active Authentication.
+     */
+    val dataGroups: List<Int>,
     val adult: Boolean,
     val expired: Boolean,
 ) {
@@ -87,9 +92,8 @@ object SodVerifier {
         // the prover accepts one.
         val lds = ASN1Sequence.getInstance(signed.signedContent.content as ByteArray)
         val hashAlg = AlgorithmIdentifier.getInstance(lds.getObjectAt(1)).algorithm
-        val expected = ASN1Sequence.getInstance(lds.getObjectAt(2))
-            .map { DataGroupHash.getInstance(it) }
-            .firstOrNull { it.dataGroupNumber == 1 }?.dataGroupHashValue?.octets
+        val hashes = ASN1Sequence.getInstance(lds.getObjectAt(2)).map { DataGroupHash.getInstance(it) }
+        val expected = hashes.firstOrNull { it.dataGroupNumber == 1 }?.dataGroupHashValue?.octets
             ?: throw VerificationException("SOD has no hash for DG1")
         val actual = MessageDigest.getInstance(hashAlg.id, bc).digest(dg1)
 
@@ -102,6 +106,7 @@ object SodVerifier {
             csca = csca,
             dg1HashValid = MessageDigest.isEqual(expected, actual),
             dataGroupHashAlgorithm = name(hashAlg.id),
+            dataGroups = hashes.map { it.dataGroupNumber }.sorted(),
             adult = Mrz.isAtLeast(dates.birth, today, minAge),
             expired = !dates.expiry.isAfter(today),
         )

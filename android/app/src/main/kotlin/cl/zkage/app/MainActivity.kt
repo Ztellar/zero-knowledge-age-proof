@@ -2,6 +2,7 @@ package cl.zkage.app
 
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.content.Intent
 import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
@@ -39,7 +40,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import cl.zkage.verifier.Presentation
 import cl.zkage.verifier.Report
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import kotlin.concurrent.thread
 import kotlinx.coroutines.delay
 import cl.zkage.verifier.SodVerifier
 
@@ -55,6 +61,9 @@ class MainActivity : ComponentActivity() {
         data object Reading : Screen
         data class Done(val report: Report, val chip: ChipData) : Screen
         data class Failed(val message: String) : Screen
+        data class Confirm(val request: Presentation.Request) : Screen
+        data object Presenting : Screen
+        data class Presented(val outcome: Presenter.Outcome) : Screen
     }
 
     private var screen by mutableStateOf<Screen>(Screen.Form)
@@ -68,6 +77,43 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxSize()) { App() }
             }
+        }
+        onLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        onLink(intent)
+    }
+
+    /** A `zkage://present` link, from the verifier page opened on this phone. */
+    private fun onLink(intent: Intent?) {
+        val link = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString ?: return
+        answer(link)
+    }
+
+    private fun answer(link: String?) {
+        val request = link?.let(Presentation::parse)
+        screen = when {
+            request == null -> Screen.Failed("Ese código no es de un verificador de edad.")
+            !Presenter.hasProof(this) -> Screen.Failed("Primero genera la prueba con tu cédula.")
+            else -> Screen.Confirm(request)
+        }
+    }
+
+    /** Google's code scanner: no camera permission, the scanning UI runs in Play services. */
+    private fun scan() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { answer(it.rawValue) }
+            .addOnFailureListener { screen = Screen.Failed("No se pudo escanear: ${it.message}") }
+    }
+
+    private fun present(request: Presentation.Request) {
+        screen = Screen.Presenting
+        thread(name = "presenter") {
+            val outcome = Presenter.present(this, request)
+            runOnUiThread { screen = Screen.Presented(outcome) }
         }
     }
 
@@ -147,7 +193,19 @@ class MainActivity : ComponentActivity() {
                 is ProofJob.State.Done -> Proved(j)
                 is ProofJob.State.Failed -> ProveFailed(j)
                 ProofJob.State.Idle -> when (val s = screen) {
-                    Screen.Form -> Form(::start)
+                    Screen.Form -> {
+                        if (Presenter.hasProof(this@MainActivity)) {
+                            Button(onClick = ::scan) { Text("Presentar mi prueba (escanear QR)") }
+                            Text("O lee tu cédula otra vez para generar una prueba nueva:", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Form(::start)
+                    }
+                    is Screen.Confirm -> Confirm(s.request)
+                    Screen.Presenting -> {
+                        Text("Enviando la prueba…", style = MaterialTheme.typography.headlineSmall)
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                    is Screen.Presented -> Presented(s.outcome)
                     Screen.Waiting -> Text("Acerca la cédula a la parte trasera del teléfono y no la muevas.")
                     Screen.Reading -> Text("Leyendo el chip… no muevas la cédula.")
                     is Screen.Done -> Result(s)
@@ -213,6 +271,9 @@ class MainActivity : ComponentActivity() {
                 "Clave del DSC: RSA ${r.dscKeyBits} bits",
                 "CSCA: ${r.csca?.label ?: "ninguna de Chile"}",
                 "Hash de los data groups: ${r.dataGroupHashAlgorithm}",
+                "Data groups en el SOD: ${r.dataGroups.joinToString(", ")}",
+                "Active Authentication (DG15): ${if (15 in r.dataGroups) "sí" else "no"}",
+                "Chip Authentication (DG14): ${if (14 in r.dataGroups) "sí" else "no"}",
                 "DG1: ${s.chip.dg1.size} B, SOD: ${s.chip.sod.size} B",
             ).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
@@ -271,6 +332,37 @@ class MainActivity : ComponentActivity() {
         Text("No se pudo generar la prueba", fontWeight = FontWeight.Bold)
         Text(s.message)
         Button(onClick = { ProofJob.reset() }) { Text("Volver") }
+    }
+
+    @Composable
+    private fun Confirm(request: Presentation.Request) {
+        Text("¿Responder a este verificador?", style = MaterialTheme.typography.headlineSmall)
+        Text(request.origin, fontWeight = FontWeight.Bold)
+        Text(
+            "Recibirá tu prueba de mayoría de edad, la clave pública del teléfono y una firma " +
+                "válida sólo para este sitio. No recibe tu nombre, RUN ni fecha de nacimiento.",
+        )
+        Button(onClick = { present(request) }) { Text("Responder") }
+        Button(onClick = { screen = Screen.Form }) { Text("Cancelar") }
+    }
+
+    @Composable
+    private fun Presented(outcome: Presenter.Outcome) {
+        when (outcome) {
+            is Presenter.Outcome.Accepted -> {
+                Text("✓ El verificador aceptó la prueba", style = MaterialTheme.typography.headlineSmall)
+                Text("Mayor de ${outcome.minAge}, cédula firmada por ${outcome.csca}, prueba del ${outcome.provedOn}.")
+            }
+            is Presenter.Outcome.Rejected -> {
+                Text("✗ El verificador rechazó la prueba", style = MaterialTheme.typography.headlineSmall)
+                Text(outcome.reason)
+            }
+            is Presenter.Outcome.Failed -> {
+                Text("No se pudo presentar", fontWeight = FontWeight.Bold)
+                Text(outcome.message)
+            }
+        }
+        Button(onClick = { screen = Screen.Form }) { Text("Volver") }
     }
 
     @Composable

@@ -34,6 +34,8 @@ class SodVerifierTest {
         assertTrue(report.authentic)
         assertTrue(report.adult)
         assertEquals("SHA256", report.dataGroupHashAlgorithm)
+        // The mock card's SOD signs DG1 only.
+        assertEquals(listOf(1), report.dataGroups)
         assertEquals("SHA256WITHRSA", report.dscSignatureAlgorithm)
         assertEquals(2048, report.dscKeyBits)
     }

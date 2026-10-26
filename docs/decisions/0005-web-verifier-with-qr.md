@@ -1,7 +1,8 @@
 # 0005 — Verificador web con QR
 
-Fecha: 2026-10-26. Estado: aceptada. **No implementada:** la librería del verificador
-(`prover/verifier`) está en curso; el servidor web y el escáner de QR en la app, no.
+Fecha: 2026-10-26. Estado: aceptada. **Implementada** (2026-10-26): librería
+`prover/verifier`, servidor `prover/verifier-web` y escaneo y envío en la app. Probada con
+una cédula real en el S25: el verificador aceptó la prueba.
 Implementa la presentación de la [0004](0004-prove-once-present-many.md).
 
 ## Contexto
@@ -26,6 +27,11 @@ Opciones que se consideraron:
    clave pública y la firma a ese origen.
 3. El servidor verifica y la página muestra el resultado.
 
+El servidor usa HTTPS con un certificado autofirmado que genera al arrancar, y el QR lleva
+su SHA-256: la app confía sólo en ese certificado (lo fija), no en una CA. Así no hace
+falta HTTP sin cifrar, que Android bloquea por defecto. El QR también lleva una sesión, y
+la página consulta su resultado; cada sesión dura 5 minutos y se responde una vez.
+
 El mensaje que se firma es `"zkage-presentation-v1" || 0x00 || u16 largo del origen ||
 origen || desafío`. El origen va firmado para que un sitio malicioso no pueda reenviar el
 QR de otro sitio y usar la respuesta (ataque de relevo): el servidor rechaza firmas hechas
@@ -41,12 +47,18 @@ El núcleo es una librería de Rust que comprueba, en orden:
 5. que el SHA-256 de la clave pública coincida con el del journal;
 6. la firma ML-DSA-65 del mensaje de presentación.
 
-La usan el servidor y un CLI para pruebas.
+La usan el servidor y, para probarlo sin teléfono, el ejemplo `mock_presentation`
+(arma la parte del teléfono con la cédula de prueba).
 
 ## Costo aceptado
 
-- Para la demo el servidor corre en el computador y el teléfono lo alcanza por la misma
-  red Wi-Fi. Publicarlo en internet tiene costo y queda fuera por ahora.
+- Para la demo el servidor corre en el computador. En vez de la misma red Wi-Fi, que en
+  algunas redes da IPs públicas en subredes distintas, el teléfono lo alcanza por USB con
+  `adb reverse tcp:8443 tcp:8443` y el servidor escucha sólo en `127.0.0.1`. Publicarlo en
+  internet tiene costo y queda fuera por ahora.
+- El navegador advierte que el certificado es autofirmado; la app no, porque lo fija.
+- El escáner de QR es el de Google Play Services (sin permiso de cámara): la app depende
+  de un componente que no es open source.
 - Si la app sube a `targetSdk` 37, Android 17 le exige el permiso de red local para hablar
   con un servidor de la misma red.
 - Las presentaciones siguen siendo enlazables entre verificadores (0004).

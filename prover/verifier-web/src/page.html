@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificador de edad</title>
+<style>
+  :root { --bg: #f7f7f5; --fg: #1c1c1a; --muted: #6b6b66; --card: #ffffff; --line: #e2e2dc; --ok: #1f7a4d; --bad: #b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ececea; --muted: #a0a09a; --card: #21211f; --line: #34342f; --ok: #5cc28f; --bad: #f2867d; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .qr { background: #fff; border-radius: 8px; padding: 8px; display: flex; justify-content: center; }
+  .qr svg { width: 100%; max-width: 300px; height: auto; }
+  #status { margin-top: 16px; font-weight: 600; }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+  #detail { margin-top: 4px; color: var(--muted); }
+  code { font-size: 0.85em; word-break: break-all; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Verificador de edad</h1>
+  <p>Escanea este código con la app <b>Prueba de edad</b>. Recibirás sólo una respuesta: si la persona es mayor de 18.</p>
+  <div class="card">
+    <div class="qr">{{QR}}</div>
+    <div id="status">Esperando la respuesta del teléfono…</div>
+    <div id="detail">Origen firmado: <code>{{ORIGIN}}</code></div>
+    <p style="margin:12px 0 0"><a id="link" href="{{LINK}}">¿Estás en el teléfono? Abrir en la app</a></p>
+  </div>
+</main>
+<script>
+  const status = document.getElementById("status");
+  const detail = document.getElementById("detail");
+  async function poll() {
+    try {
+      const response = await fetch("/sessions/{{SESSION}}");
+      if (response.status === 404) {
+        status.textContent = "El código venció. Recarga la página.";
+        status.className = "bad";
+        return;
+      }
+      const result = await response.json();
+      if (result.state === "accepted") {
+        status.textContent = "✓ Mayor de " + result.min_age;
+        status.className = "ok";
+        detail.textContent = "Cédula firmada por " + result.csca + ". Prueba generada el " + result.proved_on + ".";
+        return;
+      }
+      if (result.state === "rejected") {
+        status.textContent = "✗ Rechazada";
+        status.className = "bad";
+        detail.textContent = result.reason;
+        return;
+      }
+    } catch (e) {}
+    setTimeout(poll, 1000);
+  }
+  poll();
+</script>
+</body>
+</html>

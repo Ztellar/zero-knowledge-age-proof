@@ -69,7 +69,7 @@ object ProofJob {
             val key = DeviceKey.forNewProof(context)
             val proof = NativeProver.prove(input.csca.spki(), input.sod, input.dg1, LocalDate.now(ZoneOffset.UTC), 18, key.spkiSha256)
             // No personal data in it: only the CSCA hash, the date and the threshold are public.
-            File(context.filesDir, "age-proof.bin").writeBytes(proof.raw)
+            File(context.filesDir, Presenter.PROOF_FILE).writeBytes(proof.raw)
             // Only now: if proving had failed, the previous proof and its key stay usable.
             DeviceKey.retireOthers(context, key)
             val label = ChileCsca.keys.firstOrNull { it.spkiSha256().contentEquals(proof.claim.cscaSha256) }?.label

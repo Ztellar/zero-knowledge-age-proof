@@ -46,6 +46,9 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
+    implementation(libs.code.scanner)
+    // The scanner pulls fragment 1.0.0, too old for registerForActivityResult.
+    implementation(libs.fragment)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
 }
