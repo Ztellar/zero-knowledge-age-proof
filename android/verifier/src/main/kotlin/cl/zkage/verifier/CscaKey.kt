@@ -2,6 +2,7 @@ package cl.zkage.verifier
 
 import java.math.BigInteger
 import java.security.KeyFactory
+import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.spec.RSAPublicKeySpec
 
@@ -15,6 +16,12 @@ data class CscaKey(
     val exponent: BigInteger,
 ) {
     fun publicKey(): PublicKey = KeyFactory.getInstance("RSA").generatePublic(RSAPublicKeySpec(modulus, exponent))
+
+    /** DER SubjectPublicKeyInfo: what the prover takes as the CSCA input. */
+    fun spki(): ByteArray = publicKey().encoded
+
+    /** SHA-256 of [spki]: the value a proof's claim carries for this key. */
+    fun spkiSha256(): ByteArray = MessageDigest.getInstance("SHA-256").digest(spki())
 
     override fun toString() = label
 }

@@ -21,7 +21,7 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk/bin/aarch64-linux-android2
 adb shell mkdir -p $remote/fixtures
 adb push "$here/target/aarch64-linux-android/release/host" \
     "$ndk/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" $remote/ >/dev/null
-adb push "$here"/fixtures/out/csca.der "$here"/fixtures/out/sod.der \
+adb push "$here"/fixtures/out/csca_spki.der "$here"/fixtures/out/sod.der \
     "$here"/fixtures/out/dg1.bin $remote/fixtures/ >/dev/null
 
 # Polls VmHWM every 0.5 s while the prover runs; the kernel keeps the peak, so the last

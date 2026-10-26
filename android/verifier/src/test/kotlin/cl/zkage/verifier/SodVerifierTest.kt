@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.security.cert.CertificateFactory
 import java.security.interfaces.RSAPublicKey
 import java.time.LocalDate
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -70,6 +71,12 @@ class SodVerifierTest {
         val len = sod.size
         val wrapped = byteArrayOf(0x77, 0x82.toByte(), (len shr 8).toByte(), len.toByte()) + sod
         assertTrue(SodVerifier.verify(wrapped, dg1, listOf(testCsca), today).authentic)
+    }
+
+    @Test
+    fun spkiMatchesOpenSsl() {
+        // The prover hashes these exact bytes into its claim, so they must be byte-identical.
+        assertArrayEquals(fixture("csca_spki.der"), testCsca.spki())
     }
 
     @Test

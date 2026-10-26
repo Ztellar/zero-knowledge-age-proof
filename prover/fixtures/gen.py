@@ -12,6 +12,8 @@ CSCA with RSA 3072. The stage 1 and 2 measurements used 4096 for both
 Outputs, next to this script in `out/`:
     csca.der  - self-signed test CSCA certificate (RSA, --csca-bits)
     dsc.der   - test DSC certificate signed by the CSCA (RSA, --dsc-bits)
+    csca_spki.der, dsc_spki.der - their public keys as DER SubjectPublicKeyInfo; the prover
+                takes the CSCA as a key, and tests use the DSC key as a wrong CSCA
     dg1.bin   - DG1 data group (tag 0x61 wrapping the 90-char TD1 MRZ)
     sod.der   - SOD: CMS SignedData over an LDSSecurityObject with the DG1 hash
 
@@ -142,6 +144,8 @@ def make_chain(csca_bits: int, dsc_bits: int) -> Path:
             "-CAcreateserial", "-sha256", "-days", "1825", "-extfile", str(ext), "-out", str(dsc_pem))
     openssl("x509", "-in", str(csca_pem), "-outform", "DER", "-out", str(OUT / "csca.der"))
     openssl("x509", "-in", str(dsc_pem), "-outform", "DER", "-out", str(OUT / "dsc.der"))
+    for name, key in (("csca", csca_key), ("dsc", dsc_key)):
+        openssl("pkey", "-in", str(key), "-pubout", "-outform", "DER", "-out", str(OUT / f"{name}_spki.der"))
     return dsc_key
 
 

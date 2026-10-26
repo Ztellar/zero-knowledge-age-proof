@@ -3,7 +3,7 @@
 //! The same code runs natively (tests, Android) and inside the RISC Zero guest, where
 //! running it is what gets proven. It checks, in order:
 //!
-//! 1. the DSC certificate is signed by the CSCA (RSA, SHA-256);
+//! 1. the DSC certificate is signed by the CSCA key (RSA, SHA-256);
 //! 2. the SOD signed attributes are signed by the DSC;
 //! 3. the SOD `messageDigest` attribute matches the LDSSecurityObject it carries;
 //! 4. the DG1 hash in the LDSSecurityObject matches DG1;
@@ -31,14 +31,19 @@ const OID_SHA256: &[u8] = &[0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01
 const OID_RSA_ENCRYPTION: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
 const OID_SHA256_WITH_RSA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b];
 const OID_MESSAGE_DIGEST: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x09, 0x04];
+/// Application tag of the EF.SOD file on the chip.
+const EF_SOD: u8 = 0x77;
 const OID_LDS_SECURITY_OBJECT: &[u8] = &[0x67, 0x81, 0x08, 0x01, 0x01, 0x01];
 
 /// What the prover feeds in. Everything except `today`, `min_age` and the CSCA is private.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Inputs {
-    /// DER of the CSCA certificate. Public: it is one of Chile's published CSCAs.
-    pub csca_der: Vec<u8>,
-    /// DER of the SOD (CMS SignedData), including the DSC certificate.
+    /// DER SubjectPublicKeyInfo of the CSCA key. Public: it is one of Chile's published
+    /// CSCAs. A key rather than a certificate, because the public registries of Chile's
+    /// CSCAs carry only modulus and exponent.
+    pub csca_spki: Vec<u8>,
+    /// EF.SOD as read from the chip (tag 0x77 wrapping a CMS ContentInfo), or the bare
+    /// ContentInfo. It includes the DSC certificate.
     pub sod_der: Vec<u8>,
     /// Raw DG1 file as read from the chip.
     pub dg1: Vec<u8>,
@@ -51,8 +56,8 @@ impl Inputs {
     /// Length-prefixed binary encoding. The zkVM's default serializer spends a 32-bit word per
     /// byte, which made reading these inputs cost more than verifying them.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.csca_der.len() + self.sod_der.len() + self.dg1.len() + 17);
-        for field in [&self.csca_der, &self.sod_der, &self.dg1] {
+        let mut out = Vec::with_capacity(self.csca_spki.len() + self.sod_der.len() + self.dg1.len() + 17);
+        for field in [&self.csca_spki, &self.sod_der, &self.dg1] {
             out.extend_from_slice(&(field.len() as u32).to_le_bytes());
             out.extend_from_slice(field);
         }
@@ -64,7 +69,7 @@ impl Inputs {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
         let r = InputsRef::from_bytes(bytes)?;
         Ok(Inputs {
-            csca_der: r.csca_der.to_vec(),
+            csca_spki: r.csca_spki.to_vec(),
             sod_der: r.sod_der.to_vec(),
             dg1: r.dg1.to_vec(),
             today: r.today,
@@ -73,14 +78,14 @@ impl Inputs {
     }
 
     pub fn as_ref(&self) -> InputsRef<'_> {
-        InputsRef { csca_der: &self.csca_der, sod_der: &self.sod_der, dg1: &self.dg1, today: self.today, min_age: self.min_age }
+        InputsRef { csca_spki: &self.csca_spki, sod_der: &self.sod_der, dg1: &self.dg1, today: self.today, min_age: self.min_age }
     }
 }
 
 /// [`Inputs`] borrowed from an encoded buffer, so the guest never copies the chip data.
 #[derive(Clone, Copy, Debug)]
 pub struct InputsRef<'a> {
-    pub csca_der: &'a [u8],
+    pub csca_spki: &'a [u8],
     pub sod_der: &'a [u8],
     pub dg1: &'a [u8],
     pub today: Date,
@@ -97,10 +102,10 @@ impl<'a> InputsRef<'a> {
             rest = tail;
             Ok(value)
         };
-        let (csca_der, sod_der, dg1) = (field()?, field()?, field()?);
+        let (csca_spki, sod_der, dg1) = (field()?, field()?, field()?);
         match rest {
             [y0, y1, month, day, min_age] => Ok(InputsRef {
-                csca_der,
+                csca_spki,
                 sod_der,
                 dg1,
                 today: Date { year: u16::from_le_bytes([*y0, *y1]), month: *month, day: *day },
@@ -114,7 +119,8 @@ impl<'a> InputsRef<'a> {
 /// What the proof makes public.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claim {
-    /// SHA-256 of the CSCA certificate DER: tells the verifier which country key was used.
+    /// SHA-256 of the CSCA SubjectPublicKeyInfo DER: tells the verifier which country key
+    /// was used.
     pub csca_sha256: [u8; 32],
     pub today: Date,
     pub min_age: u8,
@@ -150,10 +156,9 @@ pub fn verify(inputs: &Inputs) -> Result<Claim, Error> {
 /// Same as [`verify`], calling `step` after each check with its name. The guest uses it to
 /// count cycles per check.
 pub fn verify_traced(inputs: InputsRef<'_>, step: &mut dyn FnMut(&'static str)) -> Result<Claim, Error> {
-    let csca = Cert::parse(inputs.csca_der)?;
     let sod = Sod::parse(inputs.sod_der)?;
     let dsc = Cert::parse(sod.dsc_der)?;
-    let csca_key = rsa_key(csca.spki)?;
+    let csca_key = rsa_key(inputs.csca_spki)?;
     let dsc_key = rsa_key(dsc.spki)?;
     step("1 parse + keys");
 
@@ -201,7 +206,7 @@ pub fn verify_traced(inputs: InputsRef<'_>, step: &mut dyn FnMut(&'static str)) 
     step("5 age and expiry");
 
     Ok(Claim {
-        csca_sha256: Sha256::digest(inputs.csca_der).into(),
+        csca_sha256: Sha256::digest(inputs.csca_spki).into(),
         today: inputs.today,
         min_age: inputs.min_age,
     })
@@ -255,6 +260,11 @@ struct Sod<'a> {
 
 impl<'a> Sod<'a> {
     fn parse(der: &'a [u8]) -> Result<Self, Error> {
+        // On the chip, EF.SOD wraps the ContentInfo in application tag 0x77.
+        let der = match der_walk::read(der) {
+            Some((file, _)) if file.tag == EF_SOD => file.value,
+            _ => der,
+        };
         // ContentInfo ::= SEQUENCE { contentType, [0] EXPLICIT SignedData }
         let (content_info, _) = expect(der, SEQUENCE).ok_or(Error::Asn1)?;
         let mut parts = children(content_info.value);
@@ -442,14 +452,14 @@ mod tests {
     #[test]
     fn inputs_round_trip() {
         let inputs = Inputs {
-            csca_der: alloc::vec![1, 2, 3],
+            csca_spki: alloc::vec![1, 2, 3],
             sod_der: alloc::vec![],
             dg1: alloc::vec![9; 300],
             today: d(2026, 10, 22),
             min_age: 18,
         };
         let back = Inputs::from_bytes(&inputs.to_bytes()).unwrap();
-        assert_eq!(back.csca_der, inputs.csca_der);
+        assert_eq!(back.csca_spki, inputs.csca_spki);
         assert_eq!(back.dg1, inputs.dg1);
         assert_eq!((back.today, back.min_age), (inputs.today, inputs.min_age));
         assert_eq!(Inputs::from_bytes(&inputs.to_bytes()[..10]).err(), Some(Error::Encoding));

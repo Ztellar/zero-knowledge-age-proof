@@ -89,8 +89,8 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
 
    Las mediciones de las etapas 1 y 2 usaron claves más grandes que las reales, así que
    sobreestiman el costo de las firmas. Las claves CSCA salen del registro de ZKPassport,
-   que trae sólo módulo y exponente: el core en Rust hoy espera el certificado completo de
-   la CSCA y hay que adaptarlo en la etapa 4.
+   que trae sólo módulo y exponente; por eso el core recibe la CSCA como clave (paso 1
+   de la etapa 4).
 4. **Integración.** La app lee la cédula y genera la prueba en el teléfono, una sola vez
    y en segundo plano. La prueba incluye en su journal una clave pública ML-DSA del
    teléfono ([decisión 0004](decisions/0004-prove-once-present-many.md)).
@@ -98,6 +98,11 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    Antes de partir: la cédula de prueba ahora usa los tamaños de clave reales (CSCA RSA
    3072, DSC RSA 2048); en el S25 la prueba sucinta tarda 58–65 s con 2,46 GB
    ([tamaños de clave y medición](measurements/chile-key-sizes.md)).
+   **Paso 1 hecho** (2026-10-26): el core recibe la CSCA como clave (SubjectPublicKeyInfo
+   DER) en vez de certificado, y el `Claim` publica su SHA-256; acepta el SOD tal como
+   viene del chip (tag 0x77). Un test comprueba que la clave que arma Kotlin desde módulo y
+   exponente es idéntica byte a byte a la de OpenSSL. **Falta:** clave ML-DSA en el
+   journal, probador dentro de la app y la primera prueba con una cédula real.
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la

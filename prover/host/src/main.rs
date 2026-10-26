@@ -28,7 +28,7 @@ fn fixture(name: &str) -> Vec<u8> {
 fn main() {
     let mode = env::args().nth(1).unwrap_or_else(|| "succinct".into());
     let inputs = Inputs {
-        csca_der: fixture("csca.der"),
+        csca_spki: fixture("csca_spki.der"),
         sod_der: fixture("sod.der"),
         dg1: fixture("dg1.bin"),
         today: Date { year: 2026, month: 10, day: 22 },

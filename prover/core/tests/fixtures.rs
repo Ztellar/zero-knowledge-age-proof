@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use age_core::{verify, Date, Error, Inputs};
+use sha2::{Digest, Sha256};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/out").join(name);
@@ -12,7 +13,7 @@ fn fixture(name: &str) -> Vec<u8> {
 
 fn inputs() -> Inputs {
     Inputs {
-        csca_der: fixture("csca.der"),
+        csca_spki: fixture("csca_spki.der"),
         sod_der: fixture("sod.der"),
         dg1: fixture("dg1.bin"),
         today: Date { year: 2026, month: 10, day: 22 },
@@ -24,6 +25,19 @@ fn inputs() -> Inputs {
 fn mock_card_proves_adult() {
     let claim = verify(&inputs()).expect("mock card should verify");
     assert_eq!(claim.min_age, 18);
+    let csca: [u8; 32] = Sha256::digest(fixture("csca_spki.der")).into();
+    assert_eq!(claim.csca_sha256, csca);
+}
+
+#[test]
+fn chip_wrapped_sod_is_accepted() {
+    // EF.SOD as the chip returns it: application tag 0x77 around the ContentInfo.
+    let mut i = inputs();
+    let len = i.sod_der.len();
+    let mut wrapped = vec![0x77, 0x82, (len >> 8) as u8, len as u8];
+    wrapped.extend_from_slice(&i.sod_der);
+    i.sod_der = wrapped;
+    verify(&i).expect("wrapped SOD should verify");
 }
 
 #[test]
@@ -37,7 +51,7 @@ fn tampered_dg1_is_rejected() {
 #[test]
 fn wrong_csca_is_rejected() {
     let mut i = inputs();
-    i.csca_der = fixture("dsc.der");
+    i.csca_spki = fixture("dsc_spki.der");
     assert_eq!(verify(&i), Err(Error::DscSignature));
 }
 
