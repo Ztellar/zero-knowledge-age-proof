@@ -5,7 +5,7 @@ import java.nio.ByteOrder
 import java.time.LocalDate
 
 /** What a proof makes public, decoded from its journal. */
-data class ProvedClaim(val cscaSha256: ByteArray, val today: LocalDate, val minAge: Int)
+data class ProvedClaim(val cscaSha256: ByteArray, val today: LocalDate, val minAge: Int, val deviceKeySha256: ByteArray)
 
 /** A succinct STARK receipt (bincode) and its claim, already verified on the phone. */
 class Proof(val receipt: ByteArray, val claim: ProvedClaim, val raw: ByteArray)
@@ -21,8 +21,8 @@ object NativeProver {
      * thread. Throws [IllegalArgumentException] named after the failed check when the chip
      * data does not support the claim.
      */
-    fun prove(cscaSpki: ByteArray, sod: ByteArray, dg1: ByteArray, today: LocalDate, minAge: Int): Proof {
-        val raw = prove(cscaSpki, sod, dg1, today.year, today.monthValue, today.dayOfMonth, minAge)
+    fun prove(cscaSpki: ByteArray, sod: ByteArray, dg1: ByteArray, today: LocalDate, minAge: Int, deviceKeySha256: ByteArray): Proof {
+        val raw = prove(cscaSpki, sod, dg1, today.year, today.monthValue, today.dayOfMonth, minAge, deviceKeySha256)
         val buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
         val receipt = ByteArray(buf.int).also { buf.get(it) }
         val csca = ByteArray(32).also { buf.get(it) }
@@ -30,7 +30,8 @@ object NativeProver {
         val month = buf.get().toInt()
         val day = buf.get().toInt()
         val min = buf.get().toInt() and 0xff
-        return Proof(receipt, ProvedClaim(csca, LocalDate.of(year, month, day), min), raw)
+        val deviceKey = ByteArray(32).also { buf.get(it) }
+        return Proof(receipt, ProvedClaim(csca, LocalDate.of(year, month, day), min, deviceKey), raw)
     }
 
     @JvmStatic
@@ -42,5 +43,6 @@ object NativeProver {
         month: Int,
         day: Int,
         minAge: Int,
+        deviceKeySha256: ByteArray,
     ): ByteArray
 }

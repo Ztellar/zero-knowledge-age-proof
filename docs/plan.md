@@ -2,10 +2,11 @@
 
 Fecha: 2026-10-22.
 
-Estado: **etapa 4 en curso** (2026-10-26): el probador corre en el computador y en el S25 con
+Estado: **etapa 4 hecha, sigue la 5** (2026-10-26): el probador corre en el computador y en el S25 con
 una cédula de prueba; resultados en `measurements/stage-1-desktop.md` y
 `measurements/stage-2-android.md`. La app lee la cédula real, verifica sus firmas y genera la prueba STARK en el teléfono,
-en un servicio en segundo plano (135 s fuera de la app, 51,5 s con la app en pantalla).
+en un servicio en segundo plano (135 s fuera de la app, 51,5 s con la app en pantalla),
+ligada a una clave ML-DSA-65 del teléfono.
 
 ## Objetivo
 
@@ -120,7 +121,15 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    (0–7); el cpuset `background` usa sólo 0–1 y 4–5. No se midió en qué cpuset quedó el
    proceso durante la corrida. Una sola corrida; no se confirmó que tocar la notificación
    abra el resultado.
-   **Falta:** clave ML-DSA en el journal; la librería pesa 87 MB y la APK de debug 134 MB.
+   **Clave ML-DSA hecha** (2026-10-26): el journal publica `device_key_sha256`, el SHA-256
+   de la clave pública ML-DSA-65 del teléfono; dónde vive la clave está en la
+   [decisión 0004](decisions/0004-prove-once-present-many.md). El programa sube de 157.578 a
+   161.167 ciclos (+3.589) y sigue en un segmento. Al terminar, la app firma un desafío
+   aleatorio y lo verifica contra el hash de la prueba. Primera corrida en el S25 con la
+   cédula real: prueba de 223.770 B en 94,2 s (no se registró si la app estaba en
+   pantalla), clave en software con la semilla cifrada por una clave AES en StrongBox,
+   firma de 3.309 B en 116 ms (una sola medición, incluye la primera carga de clases).
+   **Falta:** la librería pesa 87 MB y la APK de debug 134 MB.
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la

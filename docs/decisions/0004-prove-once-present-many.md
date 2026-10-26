@@ -1,6 +1,8 @@
 # 0004 — Probar una vez, presentar muchas
 
-Fecha: 2026-10-25. Estado: aceptada. **No implementada.** Complementa la
+Fecha: 2026-10-25. Estado: aceptada. **Implementada en parte** (2026-10-26): registro con la
+clave ML-DSA en el journal y una presentación de muestra dentro de la app. **Falta** el
+verificador externo con desafío (etapa 5). Complementa la
 [0003](0003-android-app-post-quantum-proof.md).
 
 ## Contexto
@@ -51,9 +53,16 @@ Formas de cerrarlo, ambas fuera de la primera versión:
 
 ## Preguntas abiertas
 
-- **Dónde vive la clave ML-DSA.** Lo ideal es el Android Keystore con hardware, para que no
-  se pueda copiar. No está verificado que el Keystore del S25 soporte ML-DSA; si no lo
-  soporta, la clave queda cifrada con una clave AES del Keystore.
+- **Dónde vive la clave ML-DSA.** *Resuelta 2026-10-26.* El Android Keystore genera claves
+  ML-DSA desde la API 37 (`KeyProperties.KEY_ALGORITHM_ML_DSA_65`, "Added in API level 37"
+  en la referencia de Android); el S25 está en la API 36. La app
+  ([`DeviceKey`](../../android/app/src/main/kotlin/cl/zkage/app/DeviceKey.kt)) usa el
+  Keystore en API 37+ (**sin probar**: no hay un teléfono con API 37 a mano) y, si no,
+  genera la clave ML-DSA-65 con Bouncy Castle desde una semilla de 32 bytes guardada cifrada
+  con AES-256-GCM del Keystore. En el S25 esa clave AES quedó en StrongBox. Costo: al firmar,
+  la clave está en la memoria de la app; la semilla cifrada no sirve en otro teléfono.
+  El journal publica el SHA-256 de la clave pública (SubjectPublicKeyInfo DER), no la
+  clave entera (1.974 B): la presentación la manda junto con la firma.
 - **Vigencia de la prueba.** El journal trae la fecha en que se generó. Cuánto tiempo la
   acepta un verificador lo decide el verificador; la sugerencia es 12 meses, como la
   revalidación de la [0002](0002-device-registry.md).

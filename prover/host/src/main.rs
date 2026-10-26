@@ -33,6 +33,8 @@ fn main() {
         dg1: fixture("dg1.bin"),
         today: Date { year: 2026, month: 10, day: 22 },
         min_age: 18,
+        // Stands in for the phone's ML-DSA key; only its hash enters the proof.
+        device_key_sha256: [0xd0; 32],
     };
     // Smaller segments trade proving time for peak memory, which matters on phones.
     let mut builder = ExecutorEnv::builder();

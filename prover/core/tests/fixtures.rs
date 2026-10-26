@@ -18,6 +18,7 @@ fn inputs() -> Inputs {
         dg1: fixture("dg1.bin"),
         today: Date { year: 2026, month: 10, day: 22 },
         min_age: 18,
+        device_key_sha256: [0xd0; 32],
     }
 }
 
@@ -27,6 +28,7 @@ fn mock_card_proves_adult() {
     assert_eq!(claim.min_age, 18);
     let csca: [u8; 32] = Sha256::digest(fixture("csca_spki.der")).into();
     assert_eq!(claim.csca_sha256, csca);
+    assert_eq!(claim.device_key_sha256, [0xd0; 32]);
 }
 
 #[test]

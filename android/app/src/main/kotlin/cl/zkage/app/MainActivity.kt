@@ -243,20 +243,28 @@ class MainActivity : ComponentActivity() {
         val c = s.proof.claim
         Text("Prueba generada", style = MaterialTheme.typography.headlineSmall)
         Text("✓  Verificada en el teléfono")
-        Text("Dice: mayor de ${c.minAge} el ${c.today}, con una cédula firmada por la CSCA ${s.csca}. Nada más.")
+        Text("Dice: mayor de ${c.minAge} el ${c.today}, con una cédula firmada por la CSCA ${s.csca}, ligada a la clave ML-DSA de este teléfono. Nada más.")
         Text("Detalles técnicos", fontWeight = FontWeight.Bold)
         Text(
             listOf(
                 "Sistema: STARK sucinto (RISC Zero), post-cuántico",
                 "Tiempo: ${"%.1f".format(s.seconds)} s",
                 "Tamaño: ${s.proof.receipt.size} B",
-                "Hash de la CSCA: ${c.cscaSha256.take(8).joinToString("") { "%02x".format(it) }}…",
+                "Hash de la CSCA: ${c.cscaSha256.hex8()}…",
+                "Clave del teléfono: ML-DSA-65, ${s.presentation.keyStorage}",
+                "Hash de la clave: ${c.deviceKeySha256.hex8()}…",
                 "Guardada en el almacenamiento privado de la app",
             ).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
         )
+        Text("Presentación de prueba", fontWeight = FontWeight.Bold)
+        val p = s.presentation
+        Check("Desafío firmado con la clave del teléfono y verificado contra el hash de la prueba", p.valid)
+        Text("Firma ML-DSA-65: ${p.signatureBytes} B en ${p.signMillis} ms", style = MaterialTheme.typography.bodySmall)
         Button(onClick = { ProofJob.reset() }) { Text("Volver") }
     }
+
+    private fun ByteArray.hex8() = take(8).joinToString("") { "%02x".format(it) }
 
     @Composable
     private fun ProveFailed(s: ProofJob.State.Failed) {

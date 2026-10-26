@@ -9,6 +9,9 @@
 //! 4. the DG1 hash in the LDSSecurityObject matches DG1;
 //! 5. the holder is at least `min_age` years old on `today`, and the card is not expired.
 //!
+//! The claim also carries the hash of the phone's ML-DSA public key, unchecked: it only binds
+//! the proof to that key, so later presentations can be signed with it (decision 0004).
+//!
 //! Parsing uses [`der_walk`], a zero-copy reader, because full ASN.1 decoding cost more zkVM
 //! cycles than both RSA signatures together.
 
@@ -35,7 +38,8 @@ const OID_MESSAGE_DIGEST: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x
 const EF_SOD: u8 = 0x77;
 const OID_LDS_SECURITY_OBJECT: &[u8] = &[0x67, 0x81, 0x08, 0x01, 0x01, 0x01];
 
-/// What the prover feeds in. Everything except `today`, `min_age` and the CSCA is private.
+/// What the prover feeds in. Everything except `today`, `min_age`, the CSCA and the device
+/// key hash is private.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Inputs {
     /// DER SubjectPublicKeyInfo of the CSCA key. Public: it is one of Chile's published
@@ -50,19 +54,22 @@ pub struct Inputs {
     /// Verification date.
     pub today: Date,
     pub min_age: u8,
+    /// SHA-256 of the phone's ML-DSA public key (DER SubjectPublicKeyInfo). Public.
+    pub device_key_sha256: [u8; 32],
 }
 
 impl Inputs {
     /// Length-prefixed binary encoding. The zkVM's default serializer spends a 32-bit word per
     /// byte, which made reading these inputs cost more than verifying them.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.csca_spki.len() + self.sod_der.len() + self.dg1.len() + 17);
+        let mut out = Vec::with_capacity(self.csca_spki.len() + self.sod_der.len() + self.dg1.len() + 49);
         for field in [&self.csca_spki, &self.sod_der, &self.dg1] {
             out.extend_from_slice(&(field.len() as u32).to_le_bytes());
             out.extend_from_slice(field);
         }
         out.extend_from_slice(&self.today.year.to_le_bytes());
         out.extend_from_slice(&[self.today.month, self.today.day, self.min_age]);
+        out.extend_from_slice(&self.device_key_sha256);
         out
     }
 
@@ -74,11 +81,19 @@ impl Inputs {
             dg1: r.dg1.to_vec(),
             today: r.today,
             min_age: r.min_age,
+            device_key_sha256: r.device_key_sha256,
         })
     }
 
     pub fn as_ref(&self) -> InputsRef<'_> {
-        InputsRef { csca_spki: &self.csca_spki, sod_der: &self.sod_der, dg1: &self.dg1, today: self.today, min_age: self.min_age }
+        InputsRef {
+            csca_spki: &self.csca_spki,
+            sod_der: &self.sod_der,
+            dg1: &self.dg1,
+            today: self.today,
+            min_age: self.min_age,
+            device_key_sha256: self.device_key_sha256,
+        }
     }
 }
 
@@ -90,6 +105,7 @@ pub struct InputsRef<'a> {
     pub dg1: &'a [u8],
     pub today: Date,
     pub min_age: u8,
+    pub device_key_sha256: [u8; 32],
 }
 
 impl<'a> InputsRef<'a> {
@@ -103,16 +119,15 @@ impl<'a> InputsRef<'a> {
             Ok(value)
         };
         let (csca_spki, sod_der, dg1) = (field()?, field()?, field()?);
-        match rest {
-            [y0, y1, month, day, min_age] => Ok(InputsRef {
-                csca_spki,
-                sod_der,
-                dg1,
-                today: Date { year: u16::from_le_bytes([*y0, *y1]), month: *month, day: *day },
-                min_age: *min_age,
-            }),
-            _ => Err(Error::Encoding),
-        }
+        let ([y0, y1, month, day, min_age], device_key) = rest.split_first_chunk::<5>().ok_or(Error::Encoding)?;
+        Ok(InputsRef {
+            csca_spki,
+            sod_der,
+            dg1,
+            today: Date { year: u16::from_le_bytes([*y0, *y1]), month: *month, day: *day },
+            min_age: *min_age,
+            device_key_sha256: device_key.try_into().map_err(|_| Error::Encoding)?,
+        })
     }
 }
 
@@ -124,6 +139,9 @@ pub struct Claim {
     pub csca_sha256: [u8; 32],
     pub today: Date,
     pub min_age: u8,
+    /// SHA-256 of the phone's ML-DSA public key (DER SubjectPublicKeyInfo): presentations
+    /// are signed with this key.
+    pub device_key_sha256: [u8; 32],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -209,6 +227,7 @@ pub fn verify_traced(inputs: InputsRef<'_>, step: &mut dyn FnMut(&'static str)) 
         csca_sha256: Sha256::digest(inputs.csca_spki).into(),
         today: inputs.today,
         min_age: inputs.min_age,
+        device_key_sha256: inputs.device_key_sha256,
     })
 }
 
@@ -457,11 +476,15 @@ mod tests {
             dg1: alloc::vec![9; 300],
             today: d(2026, 10, 22),
             min_age: 18,
+            device_key_sha256: [7; 32],
         };
         let back = Inputs::from_bytes(&inputs.to_bytes()).unwrap();
         assert_eq!(back.csca_spki, inputs.csca_spki);
         assert_eq!(back.dg1, inputs.dg1);
         assert_eq!((back.today, back.min_age), (inputs.today, inputs.min_age));
+        assert_eq!(back.device_key_sha256, inputs.device_key_sha256);
+        let full = inputs.to_bytes();
+        assert_eq!(Inputs::from_bytes(&full[..full.len() - 1]).err(), Some(Error::Encoding));
         assert_eq!(Inputs::from_bytes(&inputs.to_bytes()[..10]).err(), Some(Error::Encoding));
     }
 

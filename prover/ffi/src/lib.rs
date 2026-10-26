@@ -11,7 +11,8 @@ use methods::{AGE_GUEST_ELF, AGE_GUEST_ID};
 use risc0_zkvm::{default_prover, ExecutorEnv, ProverOpts};
 
 /// Result layout, little-endian:
-/// `u32 receipt_len | receipt (bincode) | csca_sha256 [32] | u16 year | u8 month | u8 day | u8 min_age`.
+/// `u32 receipt_len | receipt (bincode) | csca_sha256 [32] | u16 year | u8 month | u8 day | u8 min_age
+/// | device_key_sha256 [32]`.
 ///
 /// Throws `IllegalArgumentException` with the `age_core::Error` name when the chip data
 /// does not support the claim (checked natively first, which takes milliseconds), and
@@ -27,6 +28,7 @@ pub extern "system" fn Java_cl_zkage_app_NativeProver_prove<'local>(
     month: jint,
     day: jint,
     min_age: jint,
+    device_key_sha256: JByteArray<'local>,
 ) -> jbyteArray {
     let result = (|| -> Result<Vec<u8>, (&'static str, String)> {
         let bytes = |env: &mut JNIEnv, a: &JByteArray| {
@@ -38,6 +40,9 @@ pub extern "system" fn Java_cl_zkage_app_NativeProver_prove<'local>(
             dg1: bytes(&mut env, &dg1)?,
             today: Date { year: year as u16, month: month as u8, day: day as u8 },
             min_age: min_age as u8,
+            device_key_sha256: bytes(&mut env, &device_key_sha256)?
+                .try_into()
+                .map_err(|_| ("java/lang/IllegalArgumentException", "device key hash must be 32 bytes".into()))?,
         };
         verify(&inputs).map_err(|e| ("java/lang/IllegalArgumentException", format!("{e:?}")))?;
         prove(&inputs).map_err(|e| ("java/lang/IllegalStateException", e))
@@ -65,11 +70,12 @@ fn prove(inputs: &Inputs) -> Result<Vec<u8>, String> {
     let claim: Claim = receipt.journal.decode().map_err(|e| e.to_string())?;
 
     let encoded = bincode::serialize(&receipt).map_err(|e| e.to_string())?;
-    let mut out = Vec::with_capacity(encoded.len() + 41);
+    let mut out = Vec::with_capacity(encoded.len() + 73);
     out.extend_from_slice(&(encoded.len() as u32).to_le_bytes());
     out.extend_from_slice(&encoded);
     out.extend_from_slice(&claim.csca_sha256);
     out.extend_from_slice(&claim.today.year.to_le_bytes());
     out.extend_from_slice(&[claim.today.month, claim.today.day, claim.min_age]);
+    out.extend_from_slice(&claim.device_key_sha256);
     Ok(out)
 }
