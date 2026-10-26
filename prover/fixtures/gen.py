@@ -15,9 +15,14 @@ Outputs, next to this script in `out/`:
     csca_spki.der, dsc_spki.der - their public keys as DER SubjectPublicKeyInfo; the prover
                 takes the CSCA as a key, and tests use the DSC key as a wrong CSCA
     dg1.bin   - DG1 data group (tag 0x61 wrapping the 90-char TD1 MRZ)
-    sod.der   - SOD: CMS SignedData over an LDSSecurityObject with the DG1 hash
+    dg15.bin  - DG15 data group (tag 0x6F wrapping the chip's P-256 Active Authentication
+                public key, curve named by OID), as on a real Chilean card
+    chip_aa_key.der - the mock chip's P-256 private key (PKCS#8). Committed on purpose, unlike
+                the keys below: tests and the demo use it to answer Active Authentication
+                challenges as the chip would. It protects nothing.
+    sod.der   - SOD: CMS SignedData over an LDSSecurityObject with the DG1 and DG15 hashes
 
-Private keys go to `keys/`, which is git-ignored.
+Other private keys go to `keys/`, which is git-ignored.
 """
 
 import argparse
@@ -110,10 +115,10 @@ def dg1_bytes(mrz: str) -> bytes:
     return tlv(b"\x61", tlv(b"\x5f\x1f", mrz.encode("ascii")))
 
 
-def lds_security_object(dg1: bytes) -> bytes:
+def lds_security_object(groups: dict[int, bytes]) -> bytes:
     # LDSSecurityObject ::= SEQUENCE { version 0, hashAlgorithm, dataGroupHashValues }
-    dg_hash = seq(der_int(1), tlv(b"\x04", hashlib.sha256(dg1).digest()))
-    return seq(der_int(0), seq(der_oid(OID_SHA256)), seq(dg_hash))
+    hashes = [seq(der_int(n), tlv(b"\x04", hashlib.sha256(dg).digest())) for n, dg in sorted(groups.items())]
+    return seq(der_int(0), seq(der_oid(OID_SHA256)), seq(*hashes))
 
 
 # --- OpenSSL -----------------------------------------------------------------
@@ -149,6 +154,18 @@ def make_chain(csca_bits: int, dsc_bits: int) -> Path:
     return dsc_key
 
 
+def make_chip_aa_key() -> bytes:
+    """Returns DG15. The key is kept across runs so DG15, and with it the SOD, stay stable."""
+    key = OUT / "chip_aa_key.der"
+    if not key.exists():
+        pem = KEYS / "chip-aa-p256.key"
+        openssl("genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256", "-out", str(pem))
+        openssl("pkcs8", "-topk8", "-nocrypt", "-in", str(pem), "-outform", "DER", "-out", str(key))
+    spki = subprocess.run(["openssl", "pkey", "-inform", "DER", "-in", str(key), "-pubout", "-outform", "DER"],
+                          check=True, capture_output=True).stdout
+    return tlv(b"\x6f", spki)
+
+
 def make_sod(lds: bytes, dsc_key: Path) -> None:
     lds_path = KEYS / "lds.der"
     lds_path.write_bytes(lds)
@@ -168,8 +185,10 @@ def main() -> int:
     mrz = td1_mrz()
     dg1 = dg1_bytes(mrz)
     (OUT / "dg1.bin").write_bytes(dg1)
+    dg15 = make_chip_aa_key()
+    (OUT / "dg15.bin").write_bytes(dg15)
     dsc_key = make_chain(args.csca_bits, args.dsc_bits)
-    make_sod(lds_security_object(dg1), dsc_key)
+    make_sod(lds_security_object({1: dg1, 15: dg15}), dsc_key)
     print(f"CSCA RSA {args.csca_bits}, DSC RSA {args.dsc_bits}")
     print("MRZ:")
     for i in range(0, 90, 30):

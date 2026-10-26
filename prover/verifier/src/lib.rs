@@ -7,8 +7,9 @@
 //! 2. the CSCA in the claim is one the verifier trusts (Chile's);
 //! 3. the claim's minimum age is at least the one the verifier asks for;
 //! 4. the claim's date is neither in the future nor older than the verifier accepts;
-//! 5. the device public key hashes to the one in the claim;
-//! 6. the device key signed this verifier's origin and challenge.
+//! 5. if the verifier asks for it, the chip answered Active Authentication (decision 0006);
+//! 6. the device public key hashes to the one in the claim;
+//! 7. the device key signed this verifier's origin and challenge.
 
 mod chile_csca;
 
@@ -42,6 +43,9 @@ pub struct Policy {
     pub min_age: u8,
     /// How old, in days, the proof may be.
     pub max_proof_age_days: u32,
+    /// Reject proofs made from chip files without the chip's Active Authentication answer,
+    /// which anyone who once read the card could make.
+    pub require_chip_authentication: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,6 +57,8 @@ pub enum Rejection {
     /// Dated after `today`.
     FutureProof,
     ExpiredProof,
+    /// The policy requires Active Authentication and the proof was made without it.
+    ChipNotAuthenticated,
     /// The public key is malformed, not ML-DSA-65, or not the one the proof names.
     DeviceKey,
     Signature,
@@ -83,20 +89,7 @@ pub fn verify(
     let receipt: Receipt = bincode::deserialize(&presentation.receipt).map_err(|_| Rejection::Proof)?;
     receipt.verify(AGE_GUEST_ID).map_err(|_| Rejection::Proof)?;
     let claim: Claim = receipt.journal.decode().map_err(|_| Rejection::Proof)?;
-
-    if !policy.trusted_cscas.contains(&claim.csca_sha256) {
-        return Err(Rejection::UntrustedCsca);
-    }
-    if claim.min_age < policy.min_age {
-        return Err(Rejection::AgeTooLow);
-    }
-    let age = days(today) - days(claim.today);
-    if age < 0 {
-        return Err(Rejection::FutureProof);
-    }
-    if age > i64::from(policy.max_proof_age_days) {
-        return Err(Rejection::ExpiredProof);
-    }
+    check_claim(&claim, today, policy)?;
 
     if Sha256::digest(&presentation.device_key_spki).as_slice() != claim.device_key_sha256 {
         return Err(Rejection::DeviceKey);
@@ -111,6 +104,27 @@ pub fn verify(
         return Err(Rejection::Signature);
     }
     Ok(claim)
+}
+
+/// Checks 2 to 5: what the proven claim says against what this verifier accepts.
+fn check_claim(claim: &Claim, today: Date, policy: &Policy) -> Result<(), Rejection> {
+    if !policy.trusted_cscas.contains(&claim.csca_sha256) {
+        return Err(Rejection::UntrustedCsca);
+    }
+    if claim.min_age < policy.min_age {
+        return Err(Rejection::AgeTooLow);
+    }
+    let age = days(today) - days(claim.today);
+    if age < 0 {
+        return Err(Rejection::FutureProof);
+    }
+    if age > i64::from(policy.max_proof_age_days) {
+        return Err(Rejection::ExpiredProof);
+    }
+    if policy.require_chip_authentication && !claim.chip_authenticated {
+        return Err(Rejection::ChipNotAuthenticated);
+    }
+    Ok(())
 }
 
 /// Days since 1970-01-01 in the proleptic Gregorian calendar (Howard Hinnant's
@@ -148,6 +162,25 @@ mod tests {
         assert!(message.starts_with(b"zkage-presentation-v1\0\0\x11https://a.example"));
         assert!(message.ends_with(&challenge));
         assert_ne!(message, presentation_message("https://b.example", &challenge));
+    }
+
+    #[test]
+    fn chip_authentication_policy() {
+        let mut claim = Claim {
+            csca_sha256: [1; 32],
+            today: d(2026, 10, 26),
+            min_age: 18,
+            device_key_sha256: [2; 32],
+            chip_authenticated: false,
+        };
+        let mut policy =
+            Policy { trusted_cscas: vec![[1; 32]], min_age: 18, max_proof_age_days: 365, require_chip_authentication: true };
+        assert_eq!(check_claim(&claim, d(2026, 10, 26), &policy), Err(Rejection::ChipNotAuthenticated));
+        claim.chip_authenticated = true;
+        assert_eq!(check_claim(&claim, d(2026, 10, 26), &policy), Ok(()));
+        claim.chip_authenticated = false;
+        policy.require_chip_authentication = false;
+        assert_eq!(check_claim(&claim, d(2026, 10, 26), &policy), Ok(()));
     }
 
     /// The app builds the same bytes (`PresentationTest` in Kotlin checks this vector).

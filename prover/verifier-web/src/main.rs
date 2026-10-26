@@ -2,9 +2,11 @@
 //! certificate; the page shows a QR with this server's origin, a fresh challenge and the
 //! certificate's SHA-256, which the app pins instead of trusting any CA.
 //!
-//!     cargo run --release -p verifier-web -- [--port 8443] [--host <ip>] [--trust-mock] [--cert-out <path>]
+//!     cargo run --release -p verifier-web -- [--port 8443] [--host <ip>] [--trust-mock] [--allow-no-chip] [--cert-out <path>]
 //!
 //! `--trust-mock` also accepts the mock card's CSCA, for testing without a real card.
+//! `--allow-no-chip` accepts proofs without Active Authentication (decision 0006), which
+//! anyone who once read the card's files could make; by default they are rejected.
 //! `--cert-out` writes the certificate as PEM, so a client such as curl can verify it.
 
 use std::collections::HashMap;
@@ -40,7 +42,7 @@ struct Session {
 #[derive(Clone, Serialize)]
 #[serde(tag = "state", rename_all = "lowercase")]
 enum Outcome {
-    Accepted { min_age: u8, proved_on: String, csca: String },
+    Accepted { min_age: u8, proved_on: String, csca: String, chip_authenticated: bool },
     Rejected { reason: String },
 }
 
@@ -90,6 +92,7 @@ async fn main() {
             trusted_cscas: csca_labels.iter().map(|(_, hash)| *hash).collect(),
             min_age: 18,
             max_proof_age_days: 365,
+            require_chip_authentication: !args.iter().any(|a| a == "--allow-no-chip"),
         },
         csca_labels,
         sessions: Mutex::new(HashMap::new()),
@@ -170,6 +173,7 @@ async fn present(State(state): State<Arc<AppState>>, Path(id): Path<String>, bod
                 .find(|(_, hash)| *hash == claim.csca_sha256)
                 .map(|(label, _)| label.clone())
                 .unwrap_or_default(),
+            chip_authenticated: claim.chip_authenticated,
         },
         Err(rejection) => Outcome::Rejected { reason: reason(rejection).into() },
     };
@@ -198,6 +202,7 @@ fn reason(rejection: Rejection) -> &'static str {
         Rejection::AgeTooLow => "La prueba no alcanza la edad pedida",
         Rejection::FutureProof => "La prueba tiene fecha futura",
         Rejection::ExpiredProof => "La prueba tiene más de 12 meses",
+        Rejection::ChipNotAuthenticated => "La prueba no muestra que el chip de la cédula estuviera presente (Active Authentication)",
         Rejection::DeviceKey => "La clave del teléfono no es la de la prueba",
         Rejection::Signature => "La firma no corresponde a este verificador y este desafío",
     }

@@ -51,6 +51,7 @@ fn policy() -> Policy {
         trusted_cscas: vec![Sha256::digest(fixture("csca_spki.der")).into()],
         min_age: 18,
         max_proof_age_days: 365,
+        require_chip_authentication: true,
     }
 }
 

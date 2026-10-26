@@ -114,10 +114,27 @@ class ActiveAuthTest {
 
     @Test
     fun dg15MustBeInTheSod() {
-        val sod = javaClass.classLoader.getResourceAsStream("sod.der")!!.readBytes()
-        val dg1 = javaClass.classLoader.getResourceAsStream("dg1.bin")!!.readBytes()
-        // The mock card's SOD signs DG1 only, so no DG15 can match it.
+        fun fixture(name: String) = javaClass.classLoader.getResourceAsStream(name)!!.readBytes()
+        val (sod, dg1) = fixture("sod.der") to fixture("dg1.bin")
         assertNull(SodVerifier.verify(sod, dg1).dg15HashValid)
+        assertTrue(SodVerifier.verify(sod, dg1, dg15 = fixture("dg15.bin")).dg15HashValid!!)
+        // Another chip's key: what a copy of the files with an attacker's key would carry.
         assertFalse(SodVerifier.verify(sod, dg1, dg15 = rsaChip(1024, SHA1Digest(), true).first).dg15HashValid!!)
+    }
+
+    /** The mock card's chip, as `prover/fixtures/gen.py` makes it: P-256, which the proof can check. */
+    @Test
+    fun mockChipIsProvable() {
+        fun fixture(name: String) = javaClass.classLoader.getResourceAsStream(name)!!.readBytes()
+        val key = java.security.KeyFactory.getInstance("EC", BouncyCastleProvider())
+            .generatePrivate(java.security.spec.PKCS8EncodedKeySpec(fixture("chip_aa_key.der")))
+        val response = Signature.getInstance("SHA256withPLAIN-ECDSA", BouncyCastleProvider()).run {
+            initSign(key)
+            update(challenge)
+            sign()
+        }
+        val result = ActiveAuth.verify(fixture("dg15.bin"), challenge, response, "0.4.0.127.0.7.1.1.4.1.3")
+        assertTrue(result.provable)
+        assertFalse(result.copy(curve = "brainpoolP256r1").provable)
     }
 }

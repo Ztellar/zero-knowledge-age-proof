@@ -4,6 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use age_core::{verify, Date, Error, Inputs};
+use p256::ecdsa::signature::Signer;
+use p256::ecdsa::{Signature, SigningKey};
+use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256};
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -11,11 +14,20 @@ fn fixture(name: &str) -> Vec<u8> {
     fs::read(&path).unwrap_or_else(|e| panic!("{}: {e} (run fixtures/gen.py first)", path.display()))
 }
 
+/// What the mock chip answers to an Active Authentication challenge.
+fn chip_signs(challenge: &[u8]) -> Vec<u8> {
+    let key = SigningKey::from_pkcs8_der(&fixture("chip_aa_key.der")).unwrap();
+    let signature: Signature = key.sign(challenge);
+    signature.to_bytes().to_vec()
+}
+
 fn inputs() -> Inputs {
     Inputs {
         csca_spki: fixture("csca_spki.der"),
         sod_der: fixture("sod.der"),
         dg1: fixture("dg1.bin"),
+        dg15: fixture("dg15.bin"),
+        aa_signature: chip_signs(&[0xd0; 8]),
         today: Date { year: 2026, month: 10, day: 22 },
         min_age: 18,
         device_key_sha256: [0xd0; 32],
@@ -29,6 +41,44 @@ fn mock_card_proves_adult() {
     let csca: [u8; 32] = Sha256::digest(fixture("csca_spki.der")).into();
     assert_eq!(claim.csca_sha256, csca);
     assert_eq!(claim.device_key_sha256, [0xd0; 32]);
+    assert!(claim.chip_authenticated);
+}
+
+#[test]
+fn card_read_without_active_authentication() {
+    let mut i = inputs();
+    i.dg15.clear();
+    i.aa_signature.clear();
+    assert!(!verify(&i).expect("still a valid card").chip_authenticated);
+}
+
+#[test]
+fn chip_answer_for_another_phone_is_rejected() {
+    let mut i = inputs();
+    // Same chip, but it signed another device key's hash.
+    i.aa_signature = chip_signs(&[0xd1; 8]);
+    assert_eq!(verify(&i), Err(Error::ActiveAuthentication));
+    i.aa_signature[0] ^= 1;
+    assert_eq!(verify(&i), Err(Error::ActiveAuthentication));
+}
+
+#[test]
+fn half_an_active_authentication_is_rejected() {
+    let mut i = inputs();
+    i.aa_signature.clear();
+    assert_eq!(verify(&i), Err(Error::ActiveAuthentication));
+    let mut i = inputs();
+    i.dg15.clear();
+    assert_eq!(verify(&i), Err(Error::ActiveAuthentication));
+}
+
+#[test]
+fn another_chips_key_is_rejected() {
+    // A DG15 the SOD does not sign: a copied card with a key the attacker controls.
+    let mut i = inputs();
+    let last = i.dg15.len() - 1;
+    i.dg15[last] ^= 1;
+    assert_eq!(verify(&i), Err(Error::Dg15Hash));
 }
 
 #[test]

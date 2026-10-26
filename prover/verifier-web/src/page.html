@@ -50,7 +50,9 @@
       if (result.state === "accepted") {
         status.textContent = "✓ Mayor de " + result.min_age;
         status.className = "ok";
-        detail.textContent = "Cédula firmada por " + result.csca + ". Prueba generada el " + result.proved_on + ".";
+        detail.textContent = "Cédula firmada por " + result.csca + ". " +
+          (result.chip_authenticated ? "El chip de la cédula firmó para ese teléfono. " : "Sin Active Authentication del chip. ") +
+          "Prueba generada el " + result.proved_on + ".";
         return;
       }
       if (result.state === "rejected") {

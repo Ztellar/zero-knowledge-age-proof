@@ -165,8 +165,12 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    [`ActiveAuth.kt`](../android/verifier/src/main/kotlin/cl/zkage/verifier/ActiveAuth.kt)):
    la cédula real trae DG14 y DG15; DG15 coincide con el SOD y es una clave P-256
    (prime256v1) con ecdsa-plain-SHA256; el chip firmó un desafío aleatorio y la firma es
-   válida. Meterla en la prueba es la [decisión 0006](decisions/0006-active-authentication-in-proof.md),
-   **propuesta, sin implementar.**
+   válida.
+   **Active Authentication dentro de la prueba hecha** (2026-10-26,
+   [decisión 0006](decisions/0006-active-authentication-in-proof.md)): el chip firma el
+   inicio del hash de la clave del teléfono y el programa lo comprueba. Duplica el tiempo de
+   la prueba; el tamaño del segmento se elige según la RAM del teléfono
+   ([medición](measurements/active-auth.md)). **Falta** probarla con la cédula real.
    **Falta:** el README.
 
 ## Riesgos

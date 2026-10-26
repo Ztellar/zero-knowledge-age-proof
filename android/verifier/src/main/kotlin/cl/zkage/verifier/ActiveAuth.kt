@@ -33,7 +33,13 @@ object ActiveAuth {
         val valid: Boolean,
         /** EC curve name, or null for RSA or an unknown curve. Decides the cost in the zkVM. */
         val curve: String? = null,
-    )
+    ) {
+        /** A valid answer the zkVM program can check too: it supports P-256 with SHA-256 only. */
+        val provable: Boolean get() = valid && algorithm == "EC" && curve in P256_NAMES && digest == "SHA-256"
+    }
+
+    /** Bouncy Castle's names for P-256: by OID, or by matching explicit parameters. */
+    private val P256_NAMES = setOf("prime256v1", "secp256r1", "P-256")
 
     /** EF.DG15 is a SubjectPublicKeyInfo in application tag 0x6F. */
     fun publicKey(dg15: ByteArray): PublicKey {

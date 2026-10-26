@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.code.scanner)
     // The scanner pulls fragment 1.0.0, too old for registerForActivityResult.
     implementation(libs.fragment)
+    testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
 }

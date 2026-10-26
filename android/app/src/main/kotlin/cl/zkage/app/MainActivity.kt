@@ -61,7 +61,17 @@ class MainActivity : ComponentActivity() {
         data object Waiting : Screen
         data object Reading : Screen
         /** [activeAuth] is null when the chip has no DG15 or did not answer. */
-        data class Done(val report: Report, val chip: ChipData, val activeAuth: Result<ActiveAuth.Result>?) : Screen
+        data class Done(
+            val report: Report,
+            val chip: ChipData,
+            val activeAuth: Result<ActiveAuth.Result>?,
+            /** The key whose hash the chip signed: the proof must be bound to this one. */
+            val deviceKey: DeviceKey,
+        ) : Screen {
+            /** The chip's answer, if the proof can check it. */
+            val provableAnswer: ActiveAuthAnswer?
+                get() = chip.activeAuth.takeIf { report.dg15HashValid == true && activeAuth?.getOrNull()?.provable == true }
+        }
         data class Failed(val message: String) : Screen
         data class Confirm(val request: Presentation.Request) : Screen
         data object Presenting : Screen
@@ -149,11 +159,13 @@ class MainActivity : ComponentActivity() {
         val accessKey = key ?: return
         runOnUiThread { screen = Screen.Reading }
         val next = try {
-            val chip = CardReader.read(tag, accessKey)
+            // Before reading: the chip signs the start of this key's hash (decision 0006).
+            val deviceKey = DeviceKey.forNewProof(this)
+            val chip = CardReader.read(tag, accessKey, deviceKey.spkiSha256.copyOf(8))
             val aa = chip.activeAuth?.takeIf { it.response != null }?.let {
                 runCatching { ActiveAuth.verify(it.dg15, it.challenge, it.response!!, it.ecSignatureOid) }
             }
-            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1, dg15 = chip.activeAuth?.dg15), chip, aa)
+            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1, dg15 = chip.activeAuth?.dg15), chip, aa, deviceKey)
         } catch (e: Exception) {
             Screen.Failed("${e.javaClass.simpleName}: ${e.message}")
         }
@@ -168,7 +180,7 @@ class MainActivity : ComponentActivity() {
     private fun prove(done: Screen.Done) {
         val csca = done.report.csca ?: return
         val begin = {
-            ProofJob.start(this, csca, done.chip)
+            ProofJob.start(this, csca, done.chip, done.deviceKey, done.provableAnswer)
             screen = Screen.Form
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -288,6 +300,9 @@ class MainActivity : ComponentActivity() {
             style = MaterialTheme.typography.bodySmall,
         )
         if (r.authentic && r.adult) {
+            if (s.provableAnswer == null) {
+                Text("La prueba no incluirá Active Authentication: el chip no la tiene o su respuesta no es una firma P-256 válida. Algunos verificadores pueden rechazarla.")
+            }
             Text("La prueba de conocimiento cero tarda entre uno y tres minutos y usa bastante memoria. Corre en segundo plano: puedes salir de la app.")
             Button(onClick = { prove(s) }) { Text("Generar prueba") }
         }
@@ -330,7 +345,11 @@ class MainActivity : ComponentActivity() {
         val c = s.proof.claim
         Text("Prueba generada", style = MaterialTheme.typography.headlineSmall)
         Text("✓  Verificada en el teléfono")
-        Text("Dice: mayor de ${c.minAge} el ${c.today}, con una cédula firmada por la CSCA ${s.csca}, ligada a la clave ML-DSA de este teléfono. Nada más.")
+        Text(
+            "Dice: mayor de ${c.minAge} el ${c.today}, con una cédula firmada por la CSCA ${s.csca}, ligada a la clave ML-DSA de este teléfono" +
+                (if (c.chipAuthenticated) ", y el chip de la cédula firmó para esa clave." else ". El chip no firmó: no incluye Active Authentication.") +
+                " Nada más.",
+        )
         Text("Detalles técnicos", fontWeight = FontWeight.Bold)
         Text(
             listOf(
@@ -340,6 +359,8 @@ class MainActivity : ComponentActivity() {
                 "Hash de la CSCA: ${c.cscaSha256.hex8()}…",
                 "Clave del teléfono: ML-DSA-65, ${s.presentation.keyStorage}",
                 "Hash de la clave: ${c.deviceKeySha256.hex8()}…",
+                "Chip original (Active Authentication, P-256): ${if (c.chipAuthenticated) "sí" else "no"}",
+                "Segmento del zkVM: 2^${s.segment.po2} (${s.segment.reason})",
                 "Guardada en el almacenamiento privado de la app",
             ).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
@@ -377,7 +398,10 @@ class MainActivity : ComponentActivity() {
         when (outcome) {
             is Presenter.Outcome.Accepted -> {
                 Text("✓ El verificador aceptó la prueba", style = MaterialTheme.typography.headlineSmall)
-                Text("Mayor de ${outcome.minAge}, cédula firmada por ${outcome.csca}, prueba del ${outcome.provedOn}.")
+                Text(
+                    "Mayor de ${outcome.minAge}, cédula firmada por ${outcome.csca}, prueba del ${outcome.provedOn}" +
+                        if (outcome.chipAuthenticated) ", con el chip de la cédula presente." else ", sin Active Authentication.",
+                )
             }
             is Presenter.Outcome.Rejected -> {
                 Text("✗ El verificador rechazó la prueba", style = MaterialTheme.typography.headlineSmall)

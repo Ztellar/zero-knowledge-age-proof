@@ -5,7 +5,14 @@ import java.nio.ByteOrder
 import java.time.LocalDate
 
 /** What a proof makes public, decoded from its journal. */
-data class ProvedClaim(val cscaSha256: ByteArray, val today: LocalDate, val minAge: Int, val deviceKeySha256: ByteArray)
+data class ProvedClaim(
+    val cscaSha256: ByteArray,
+    val today: LocalDate,
+    val minAge: Int,
+    val deviceKeySha256: ByteArray,
+    /** The chip answered Active Authentication for the device key (decision 0006). */
+    val chipAuthenticated: Boolean,
+)
 
 /** A succinct STARK receipt (bincode) and its claim, already verified on the phone. */
 class Proof(val receipt: ByteArray, val claim: ProvedClaim, val raw: ByteArray) {
@@ -20,7 +27,9 @@ class Proof(val receipt: ByteArray, val claim: ProvedClaim, val raw: ByteArray) 
             val day = buf.get().toInt()
             val min = buf.get().toInt() and 0xff
             val deviceKey = ByteArray(32).also { buf.get(it) }
-            return Proof(receipt, ProvedClaim(csca, LocalDate.of(year, month, day), min, deviceKey), raw)
+            // Proofs stored before decision 0006 end here.
+            val chip = buf.hasRemaining() && buf.get().toInt() == 1
+            return Proof(receipt, ProvedClaim(csca, LocalDate.of(year, month, day), min, deviceKey, chip), raw)
         }
     }
 }
@@ -32,13 +41,24 @@ object NativeProver {
     }
 
     /**
-     * Blocking and heavy (about a minute and 2.5 GB on a Galaxy S25): call off the main
-     * thread. Throws [IllegalArgumentException] named after the failed check when the chip
-     * data does not support the claim.
+     * Blocking and heavy (minutes and gigabytes, see [SegmentSize]): call off the main thread.
+     * [dg15] and [aaSignature] are both empty to prove without Active Authentication. Throws
+     * [IllegalArgumentException] named after the failed check when the chip data does not
+     * support the claim.
      */
-    fun prove(cscaSpki: ByteArray, sod: ByteArray, dg1: ByteArray, today: LocalDate, minAge: Int, deviceKeySha256: ByteArray): Proof {
-        return Proof.parse(prove(cscaSpki, sod, dg1, today.year, today.monthValue, today.dayOfMonth, minAge, deviceKeySha256))
-    }
+    fun prove(
+        cscaSpki: ByteArray,
+        sod: ByteArray,
+        dg1: ByteArray,
+        today: LocalDate,
+        minAge: Int,
+        deviceKeySha256: ByteArray,
+        dg15: ByteArray,
+        aaSignature: ByteArray,
+        segmentPo2: Int,
+    ): Proof = Proof.parse(
+        prove(cscaSpki, sod, dg1, today.year, today.monthValue, today.dayOfMonth, minAge, deviceKeySha256, dg15, aaSignature, segmentPo2),
+    )
 
     @JvmStatic
     private external fun prove(
@@ -50,5 +70,8 @@ object NativeProver {
         day: Int,
         minAge: Int,
         deviceKeySha256: ByteArray,
+        dg15: ByteArray,
+        aaSignature: ByteArray,
+        segmentPo2: Int,
     ): ByteArray
 }

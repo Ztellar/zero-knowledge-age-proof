@@ -4,7 +4,6 @@ import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import net.sf.scuba.smartcards.IsoDepCardService
 import cl.zkage.verifier.ActiveAuth
-import java.security.SecureRandom
 import org.jmrtd.BACKey
 import org.jmrtd.PassportService
 import org.jmrtd.lds.CardAccessFile
@@ -31,8 +30,12 @@ class ActiveAuthAnswer(
 data class AccessKey(val documentNumber: String, val birth: String, val expiry: String)
 
 object CardReader {
-    /** Blocking: call off the main thread. Tries PACE first and falls back to BAC. */
-    fun read(tag: Tag, key: AccessKey): ChipData {
+    /**
+     * Blocking: call off the main thread. Tries PACE first and falls back to BAC. If the chip
+     * has Active Authentication, it signs [aaChallenge] (8 bytes): the start of the device
+     * key hash, so the proof can show the chip answered for this phone (decision 0006).
+     */
+    fun read(tag: Tag, key: AccessKey, aaChallenge: ByteArray): ChipData {
         val isoDep = IsoDep.get(tag) ?: error("the tag is not ISO-DEP")
         isoDep.timeout = 10_000
         val card = IsoDepCardService(isoDep)
@@ -65,12 +68,11 @@ object CardReader {
                     DG14File(service.getInputStream(PassportService.EF_DG14, PassportService.DEFAULT_MAX_BLOCKSIZE))
                         .activeAuthenticationInfos.firstOrNull()?.signatureAlgorithmOID
                 }.getOrNull()
-                val challenge = ByteArray(8).also(SecureRandom()::nextBytes)
                 val response = runCatching {
                     // JMRTD only echoes the two algorithm names; ActiveAuth reads the real ones.
-                    service.doAA(ActiveAuth.publicKey(dg15), null, null, challenge).response
+                    service.doAA(ActiveAuth.publicKey(dg15), null, null, aaChallenge).response
                 }
-                ActiveAuthAnswer(dg15, challenge, response.getOrNull(), ecOid, response.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" })
+                ActiveAuthAnswer(dg15, aaChallenge, response.getOrNull(), ecOid, response.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" })
             }
             return ChipData(dg1, sod, if (pace.isSuccess) "PACE" else "BAC", activeAuth)
         } finally {

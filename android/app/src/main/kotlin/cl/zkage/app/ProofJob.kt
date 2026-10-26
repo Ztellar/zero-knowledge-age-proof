@@ -22,7 +22,13 @@ object ProofJob {
     sealed interface State {
         data object Idle : State
         data class Running(val startedAt: Long) : State
-        data class Done(val proof: Proof, val seconds: Double, val csca: String, val presentation: Presentation) : State
+        data class Done(
+            val proof: Proof,
+            val seconds: Double,
+            val csca: String,
+            val presentation: Presentation,
+            val segment: SegmentSize,
+        ) : State
         data class Failed(val message: String) : State
     }
 
@@ -33,7 +39,15 @@ object ProofJob {
      */
     data class Presentation(val keyStorage: String, val signatureBytes: Int, val signMillis: Long, val valid: Boolean)
 
-    private class Input(val csca: CscaKey, val sod: ByteArray, val dg1: ByteArray)
+    /** [dg15] and [aaSignature] are empty when the chip's answer cannot go in the proof. */
+    private class Input(
+        val csca: CscaKey,
+        val sod: ByteArray,
+        val dg1: ByteArray,
+        val dg15: ByteArray,
+        val aaSignature: ByteArray,
+        val key: DeviceKey,
+    )
 
     private val mutableState = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = mutableState.asStateFlow()
@@ -41,10 +55,14 @@ object ProofJob {
     @Volatile
     private var pending: Input? = null
 
-    /** Starts proving in [ProverService]. Ignored while a proof is already running. */
-    fun start(context: Context, csca: CscaKey, chip: ChipData) {
+    /**
+     * Starts proving in [ProverService]. Ignored while a proof is already running. [key] is the
+     * device key whose hash the chip signed when the card was read; [chipAnswer] is that
+     * answer when the proof can check it (a valid P-256 signature), else null.
+     */
+    fun start(context: Context, csca: CscaKey, chip: ChipData, key: DeviceKey, chipAnswer: ActiveAuthAnswer?) {
         if (state.value is State.Running) return
-        pending = Input(csca, chip.sod, chip.dg1)
+        pending = Input(csca, chip.sod, chip.dg1, chipAnswer?.dg15 ?: ByteArray(0), chipAnswer?.response ?: ByteArray(0), key)
         mutableState.value = State.Running(System.currentTimeMillis())
         try {
             context.startForegroundService(Intent(context, ProverService::class.java))
@@ -66,15 +84,19 @@ object ProofJob {
         pending = null
         val started = (state.value as? State.Running)?.startedAt ?: System.currentTimeMillis()
         val result = try {
-            val key = DeviceKey.forNewProof(context)
-            val proof = NativeProver.prove(input.csca.spki(), input.sod, input.dg1, LocalDate.now(ZoneOffset.UTC), 18, key.spkiSha256)
+            val key = input.key
+            val segment = SegmentSize.forDevice(context)
+            val proof = NativeProver.prove(
+                input.csca.spki(), input.sod, input.dg1, LocalDate.now(ZoneOffset.UTC), 18, key.spkiSha256,
+                input.dg15, input.aaSignature, segment.po2,
+            )
             // No personal data in it: only the CSCA hash, the date and the threshold are public.
             File(context.filesDir, Presenter.PROOF_FILE).writeBytes(proof.raw)
             // Only now: if proving had failed, the previous proof and its key stay usable.
             DeviceKey.retireOthers(context, key)
             val label = ChileCsca.keys.firstOrNull { it.spkiSha256().contentEquals(proof.claim.cscaSha256) }?.label
             val seconds = (System.currentTimeMillis() - started) / 1000.0
-            State.Done(proof, seconds, label ?: "desconocida", samplePresentation(key, proof))
+            State.Done(proof, seconds, label ?: "desconocida", samplePresentation(key, proof), segment)
         } catch (e: Throwable) {
             State.Failed("${e.javaClass.simpleName}: ${e.message}")
         }

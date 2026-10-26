@@ -10,7 +10,8 @@ license = "Apache-2.0"
 age-core = { path = "../../core" }
 risc0-zkvm = { version = "^3.0.6", default-features = false, features = ["std", "unstable"] }
 
-# RISC Zero forks that route RSA big-integer math and SHA-256 to zkVM accelerators.
+# RISC Zero forks that route RSA big-integer math, P-256 and SHA-256 to zkVM accelerators.
 [patch.crates-io]
+p256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", tag = "p256/v0.13.2-risczero.1" }
 rsa = { git = "https://github.com/risc0/RustCrypto-RSA", tag = "v0.9.9-risczero.0" }
 sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.9-risczero.0" }

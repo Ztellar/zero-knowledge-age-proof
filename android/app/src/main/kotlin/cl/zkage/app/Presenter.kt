@@ -22,7 +22,7 @@ object Presenter {
     const val PROOF_FILE = "age-proof.bin"
 
     sealed interface Outcome {
-        data class Accepted(val minAge: Int, val provedOn: String, val csca: String) : Outcome
+        data class Accepted(val minAge: Int, val provedOn: String, val csca: String, val chipAuthenticated: Boolean) : Outcome
         data class Rejected(val reason: String) : Outcome
         data class Failed(val message: String) : Outcome
     }
@@ -41,7 +41,10 @@ object Presenter {
             code == 200 -> {
                 val json = JSONObject(text)
                 when (json.getString("state")) {
-                    "accepted" -> Outcome.Accepted(json.getInt("min_age"), json.getString("proved_on"), json.getString("csca"))
+                    "accepted" -> Outcome.Accepted(
+                        json.getInt("min_age"), json.getString("proved_on"), json.getString("csca"),
+                        json.optBoolean("chip_authenticated"),
+                    )
                     else -> Outcome.Rejected(json.optString("reason"))
                 }
             }

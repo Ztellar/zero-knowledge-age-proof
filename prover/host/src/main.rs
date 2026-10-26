@@ -20,6 +20,8 @@ use age_core::{Claim, Date, Inputs};
 use methods::{AGE_GUEST_ELF, AGE_GUEST_ID};
 use ml_dsa::pkcs8::EncodePublicKey;
 use ml_dsa::{Keypair, MlDsa65, SigningKey};
+use p256::ecdsa::signature::Signer;
+use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256};
 use risc0_zkvm::{default_executor, default_prover, ExecutorEnv, ProverOpts};
 
@@ -36,13 +38,19 @@ pub const DEMO_DEVICE_SEED: [u8; 32] = [0x5e; 32];
 
 fn main() {
     let mode = env::args().nth(1).unwrap_or_else(|| "succinct".into());
+    let device_key_sha256: [u8; 32] = Sha256::digest(demo_device_spki()).into();
+    // The mock chip answers Active Authentication for the demo key, as a real chip would.
+    let chip = p256::ecdsa::SigningKey::from_pkcs8_der(&fixture("chip_aa_key.der")).unwrap();
+    let aa_signature: p256::ecdsa::Signature = chip.sign(&device_key_sha256[..8]);
     let inputs = Inputs {
         csca_spki: fixture("csca_spki.der"),
         sod_der: fixture("sod.der"),
         dg1: fixture("dg1.bin"),
+        dg15: fixture("dg15.bin"),
+        aa_signature: aa_signature.to_bytes().to_vec(),
         today: Date { year: 2026, month: 10, day: 22 },
         min_age: 18,
-        device_key_sha256: Sha256::digest(demo_device_spki()).into(),
+        device_key_sha256,
     };
     // Smaller segments trade proving time for peak memory, which matters on phones.
     let mut builder = ExecutorEnv::builder();
