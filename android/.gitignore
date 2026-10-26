@@ -3,3 +3,5 @@ build/
 local.properties
 .kotlin/
 .DS_Store
+# Built by prover/scripts/build-android-lib.sh
+app/src/main/jniLibs/

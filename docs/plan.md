@@ -2,9 +2,9 @@
 
 Fecha: 2026-10-22.
 
-Estado: **etapa 3 hecha** (2026-10-25): el probador corre en el computador y en el S25 con
+Estado: **etapa 4 en curso** (2026-10-26): el probador corre en el computador y en el S25 con
 una cédula de prueba; resultados en `measurements/stage-1-desktop.md` y
-`measurements/stage-2-android.md`. La app lee la cédula real y verifica sus firmas en Kotlin; todavía no genera la prueba.
+`measurements/stage-2-android.md`. La app lee la cédula real, verifica sus firmas y genera la prueba STARK en el teléfono.
 
 ## Objetivo
 
@@ -101,8 +101,16 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    **Paso 1 hecho** (2026-10-26): el core recibe la CSCA como clave (SubjectPublicKeyInfo
    DER) en vez de certificado, y el `Claim` publica su SHA-256; acepta el SOD tal como
    viene del chip (tag 0x77). Un test comprueba que la clave que arma Kotlin desde módulo y
-   exponente es idéntica byte a byte a la de OpenSSL. **Falta:** clave ML-DSA en el
-   journal, probador dentro de la app y la primera prueba con una cédula real.
+   exponente es idéntica byte a byte a la de OpenSSL.
+   **Paso 3 hecho** (2026-10-26): el probador corre dentro de la app como librería JNI
+   ([`prover/ffi`](../prover/ffi/src/lib.rs)). **Primera prueba STARK a partir de una
+   cédula real** en el S25: 51,5 s, 223.514 B, verificada en el
+   teléfono, con el `Claim` apuntando a la CSCA CHL 2021. La app llegó a `VmHWM`
+   2.476.448 kB (2,54 GB) y Android no la cerró; una sola corrida, con la app en primer
+   plano y la pantalla encendida.
+   **Falta:** clave ML-DSA en el journal; correr en un servicio en segundo plano (hoy
+   corre en la actividad y se pierde si el usuario sale de la app); la librería pesa
+   87 MB y la APK de debug 134 MB.
 5. **Presentación, verificador y documentación.** El verificador manda un desafío y el
    teléfono responde con la prueba guardada y una firma ML-DSA. Verificador (CLI o web) y
    README con el mapa post-cuántico, las mediciones, la limitación de enlazabilidad de la
