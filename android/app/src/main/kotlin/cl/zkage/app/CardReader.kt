@@ -3,13 +3,29 @@ package cl.zkage.app
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import net.sf.scuba.smartcards.IsoDepCardService
+import cl.zkage.verifier.ActiveAuth
+import java.security.SecureRandom
 import org.jmrtd.BACKey
 import org.jmrtd.PassportService
 import org.jmrtd.lds.CardAccessFile
 import org.jmrtd.lds.PACEInfo
+import org.jmrtd.lds.icao.DG14File
 
 /** The chip files the verifier needs, plus which access protocol opened them. */
-class ChipData(val dg1: ByteArray, val sod: ByteArray, val protocol: String)
+class ChipData(val dg1: ByteArray, val sod: ByteArray, val protocol: String, val activeAuth: ActiveAuthAnswer?)
+
+/**
+ * The chip's answer to an Active Authentication challenge, or why there is none. Stays on the
+ * phone: DG15 is a key unique to this card.
+ */
+class ActiveAuthAnswer(
+    val dg15: ByteArray,
+    val challenge: ByteArray,
+    val response: ByteArray?,
+    /** DG14's ActiveAuthenticationInfo algorithm; ICAO requires it for EC keys. */
+    val ecSignatureOid: String?,
+    val error: String?,
+)
 
 /** Access key printed on the card: document number and two YYMMDD dates. */
 data class AccessKey(val documentNumber: String, val birth: String, val expiry: String)
@@ -41,7 +57,22 @@ object CardReader {
             if (pace.isFailure) service.doBAC(bacKey)
 
             fun file(fid: Short) = service.getInputStream(fid, PassportService.DEFAULT_MAX_BLOCKSIZE).use { it.readBytes() }
-            return ChipData(file(PassportService.EF_DG1), file(PassportService.EF_SOD), if (pace.isSuccess) "PACE" else "BAC")
+            val dg1 = file(PassportService.EF_DG1)
+            val sod = file(PassportService.EF_SOD)
+            // A chip without DG15 has no Active Authentication: reading it fails.
+            val activeAuth = runCatching { file(PassportService.EF_DG15) }.getOrNull()?.let { dg15 ->
+                val ecOid = runCatching {
+                    DG14File(service.getInputStream(PassportService.EF_DG14, PassportService.DEFAULT_MAX_BLOCKSIZE))
+                        .activeAuthenticationInfos.firstOrNull()?.signatureAlgorithmOID
+                }.getOrNull()
+                val challenge = ByteArray(8).also(SecureRandom()::nextBytes)
+                val response = runCatching {
+                    // JMRTD only echoes the two algorithm names; ActiveAuth reads the real ones.
+                    service.doAA(ActiveAuth.publicKey(dg15), null, null, challenge).response
+                }
+                ActiveAuthAnswer(dg15, challenge, response.getOrNull(), ecOid, response.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" })
+            }
+            return ChipData(dg1, sod, if (pace.isSuccess) "PACE" else "BAC", activeAuth)
         } finally {
             card.close()
         }

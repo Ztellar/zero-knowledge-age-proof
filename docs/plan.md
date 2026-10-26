@@ -161,8 +161,12 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    rechazadas. **Con la cédula real en el S25: aceptada** ("Mayor de 18, cédula firmada
    por CHL 2021 RSA3072, prueba del 2026-10-26"). Demo:
    `adb reverse tcp:8443 tcp:8443` y `cargo run --release -p verifier-web -- --host 127.0.0.1`.
-   La app también muestra qué data groups firma el SOD, para saber si la cédula trae
-   Active Authentication (DG15); **falta leerlo en una cédula real.**
+   **Active Authentication comprobada fuera de la prueba** (2026-10-26,
+   [`ActiveAuth.kt`](../android/verifier/src/main/kotlin/cl/zkage/verifier/ActiveAuth.kt)):
+   la cédula real trae DG14 y DG15; DG15 coincide con el SOD y es una clave P-256
+   (prime256v1) con ecdsa-plain-SHA256; el chip firmó un desafío aleatorio y la firma es
+   válida. Meterla en la prueba es la [decisión 0006](decisions/0006-active-authentication-in-proof.md),
+   **propuesta, sin implementar.**
    **Falta:** el README.
 
 ## Riesgos

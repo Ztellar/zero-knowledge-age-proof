@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import cl.zkage.verifier.ActiveAuth
 import cl.zkage.verifier.Presentation
 import cl.zkage.verifier.Report
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -59,7 +60,8 @@ class MainActivity : ComponentActivity() {
         data object Form : Screen
         data object Waiting : Screen
         data object Reading : Screen
-        data class Done(val report: Report, val chip: ChipData) : Screen
+        /** [activeAuth] is null when the chip has no DG15 or did not answer. */
+        data class Done(val report: Report, val chip: ChipData, val activeAuth: Result<ActiveAuth.Result>?) : Screen
         data class Failed(val message: String) : Screen
         data class Confirm(val request: Presentation.Request) : Screen
         data object Presenting : Screen
@@ -148,7 +150,10 @@ class MainActivity : ComponentActivity() {
         runOnUiThread { screen = Screen.Reading }
         val next = try {
             val chip = CardReader.read(tag, accessKey)
-            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1), chip)
+            val aa = chip.activeAuth?.takeIf { it.response != null }?.let {
+                runCatching { ActiveAuth.verify(it.dg15, it.challenge, it.response!!, it.ecSignatureOid) }
+            }
+            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1, dg15 = chip.activeAuth?.dg15), chip, aa)
         } catch (e: Exception) {
             Screen.Failed("${e.javaClass.simpleName}: ${e.message}")
         }
@@ -262,6 +267,9 @@ class MainActivity : ComponentActivity() {
         Check("DSC firmado por el Registro Civil", r.csca != null)
         Check("Hash de DG1 en el SOD", r.dg1HashValid)
         Check("Documento vigente", !r.expired)
+        if (s.chip.activeAuth != null) {
+            Check("Chip original (Active Authentication)", r.dg15HashValid == true && s.activeAuth?.getOrNull()?.valid == true)
+        }
         Text("Detalles técnicos", fontWeight = FontWeight.Bold)
         Text(
             listOf(
@@ -274,6 +282,7 @@ class MainActivity : ComponentActivity() {
                 "Data groups en el SOD: ${r.dataGroups.joinToString(", ")}",
                 "Active Authentication (DG15): ${if (15 in r.dataGroups) "sí" else "no"}",
                 "Chip Authentication (DG14): ${if (14 in r.dataGroups) "sí" else "no"}",
+                *activeAuthLines(s).toTypedArray(),
                 "DG1: ${s.chip.dg1.size} B, SOD: ${s.chip.sod.size} B",
             ).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
@@ -283,6 +292,23 @@ class MainActivity : ComponentActivity() {
             Button(onClick = { prove(s) }) { Text("Generar prueba") }
         }
         Button(onClick = { screen = Screen.Form }) { Text("Leer otra") }
+    }
+
+    /** Algorithm, size and outcome only: the DG15 key itself identifies the card. */
+    private fun activeAuthLines(s: Screen.Done): List<String> {
+        val answer = s.chip.activeAuth ?: return emptyList()
+        val outcome = s.activeAuth
+        return listOfNotNull(
+            "DG15 coincide con el SOD: ${if (s.report.dg15HashValid == true) "sí" else "no"}",
+            outcome?.getOrNull()?.let { "Clave de AA: ${it.algorithm} ${it.keyBits} bits${it.curve?.let { c -> " ($c)" } ?: ""}, ${it.digest}" },
+            "Algoritmo de AA en DG14: ${answer.ecSignatureOid ?: "no indicado"}",
+            when {
+                answer.error != null -> "Respuesta del chip: error (${answer.error})"
+                outcome == null -> null
+                outcome.isFailure -> "Respuesta del chip: no se pudo verificar (${outcome.exceptionOrNull()?.message})"
+                else -> "Respuesta del chip: ${answer.response!!.size} B, firma ${if (outcome.getOrThrow().valid) "válida" else "inválida"}"
+            },
+        )
     }
 
     @Composable

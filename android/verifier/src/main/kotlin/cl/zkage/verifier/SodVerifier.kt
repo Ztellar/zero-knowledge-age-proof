@@ -39,6 +39,8 @@ data class Report(
      * chip has: DG14 means Chip Authentication, DG15 Active Authentication.
      */
     val dataGroups: List<Int>,
+    /** DG15 read from the chip matches its SOD hash; null if it was not read. */
+    val dg15HashValid: Boolean?,
     val adult: Boolean,
     val expired: Boolean,
 ) {
@@ -60,6 +62,7 @@ object SodVerifier {
         cscaKeys: List<CscaKey> = ChileCsca.keys,
         today: LocalDate = LocalDate.now(ZoneOffset.UTC),
         minAge: Int = 18,
+        dg15: ByteArray? = null,
     ): Report {
         val signed = try {
             CMSSignedData(unwrapSod(sod))
@@ -93,9 +96,11 @@ object SodVerifier {
         val lds = ASN1Sequence.getInstance(signed.signedContent.content as ByteArray)
         val hashAlg = AlgorithmIdentifier.getInstance(lds.getObjectAt(1)).algorithm
         val hashes = ASN1Sequence.getInstance(lds.getObjectAt(2)).map { DataGroupHash.getInstance(it) }
-        val expected = hashes.firstOrNull { it.dataGroupNumber == 1 }?.dataGroupHashValue?.octets
-            ?: throw VerificationException("SOD has no hash for DG1")
-        val actual = MessageDigest.getInstance(hashAlg.id, bc).digest(dg1)
+        fun hashValid(number: Int, file: ByteArray): Boolean? {
+            val expected = hashes.firstOrNull { it.dataGroupNumber == number }?.dataGroupHashValue?.octets ?: return null
+            return MessageDigest.isEqual(expected, MessageDigest.getInstance(hashAlg.id, bc).digest(file))
+        }
+        val dg1HashValid = hashValid(1, dg1) ?: throw VerificationException("SOD has no hash for DG1")
 
         val dates = Mrz.dates(Mrz.td1(dg1), today)
         return Report(
@@ -104,28 +109,32 @@ object SodVerifier {
             dscSignatureAlgorithm = names.getAlgorithmName(dsc.signatureAlgorithm),
             dscKeyBits = rsaBits(dsc),
             csca = csca,
-            dg1HashValid = MessageDigest.isEqual(expected, actual),
+            dg1HashValid = dg1HashValid,
             dataGroupHashAlgorithm = name(hashAlg.id),
             dataGroups = hashes.map { it.dataGroupNumber }.sorted(),
+            dg15HashValid = dg15?.let { hashValid(15, it) ?: false },
             adult = Mrz.isAtLeast(dates.birth, today, minAge),
             expired = !dates.expiry.isAfter(today),
         )
     }
 
     /** EF.SOD on the chip wraps the CMS ContentInfo in application tag 0x77. */
-    fun unwrapSod(sod: ByteArray): ByteArray {
-        if (sod.isEmpty() || sod[0] != 0x77.toByte()) return sod
+    fun unwrapSod(sod: ByteArray): ByteArray = unwrap(sod, 0x77, "EF.SOD")
+
+    /** Strips the one-byte application [tag] an EF wraps its content in; returns it as is if absent. */
+    fun unwrap(file: ByteArray, tag: Int, name: String): ByteArray {
+        if (file.isEmpty() || file[0] != tag.toByte()) return file
         var pos = 1
-        val first = sod[pos++].toInt() and 0xff
+        val first = file[pos++].toInt() and 0xff
         val len = if (first < 0x80) {
             first
         } else {
             val n = first and 0x7f
-            if (n !in 1..4) throw VerificationException("EF.SOD length is not supported")
-            (0 until n).fold(0) { acc, _ -> (acc shl 8) or (sod[pos++].toInt() and 0xff) }
+            if (n !in 1..4) throw VerificationException("$name length is not supported")
+            (0 until n).fold(0) { acc, _ -> (acc shl 8) or (file[pos++].toInt() and 0xff) }
         }
-        if (pos + len > sod.size) throw VerificationException("EF.SOD is truncated")
-        return sod.copyOfRange(pos, pos + len)
+        if (pos + len > file.size) throw VerificationException("$name is truncated")
+        return file.copyOfRange(pos, pos + len)
     }
 
     private fun name(oid: String) = names.getAlgorithmName(ASN1ObjectIdentifier(oid))
