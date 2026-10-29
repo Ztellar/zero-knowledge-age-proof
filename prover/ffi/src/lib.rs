@@ -1,7 +1,10 @@
 //! JNI entry point for the Android app: check the chip data, prove the age claim and
 //! verify the receipt, all on the phone.
 //!
-//! Kotlin side: `cl.zkage.app.NativeProver.prove`.
+//! Kotlin side: `cl.zkage.app.NativeProver.prove`. The face match of decision 0007 is in
+//! [face].
+
+mod face;
 
 use age_core::{verify, Claim, Date, Inputs};
 use jni::objects::{JByteArray, JClass};

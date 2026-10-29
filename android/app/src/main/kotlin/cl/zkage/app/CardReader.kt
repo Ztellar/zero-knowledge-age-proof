@@ -9,9 +9,31 @@ import org.jmrtd.PassportService
 import org.jmrtd.lds.CardAccessFile
 import org.jmrtd.lds.PACEInfo
 import org.jmrtd.lds.icao.DG14File
+import org.jmrtd.lds.icao.DG2File
+import org.jmrtd.lds.iso19794.FaceInfo
+import org.jmrtd.lds.iso39794.FaceImageDataBlock
 
-/** The chip files the verifier needs, plus which access protocol opened them. */
-class ChipData(val dg1: ByteArray, val sod: ByteArray, val protocol: String, val activeAuth: ActiveAuthAnswer?)
+/**
+ * The chip files the verifier needs, plus which access protocol opened them. [dg2] is the face
+ * photo's data group, null if the chip has none: it stays in memory for the face match
+ * (decision 0007) and is never stored or sent.
+ */
+class ChipData(val dg1: ByteArray, val sod: ByteArray, val protocol: String, val activeAuth: ActiveAuthAnswer?, val dg2: ByteArray?)
+
+/** The photo inside DG2, JPEG or JPEG 2000, as the chip stores it. */
+class ChipPhoto(val bytes: ByteArray, val mimeType: String) {
+    companion object {
+        /** The first face image in DG2, in either encoding JMRTD reads (ISO 19794-5 or 39794-5). */
+        fun from(dg2: ByteArray): ChipPhoto? = DG2File(dg2.inputStream()).subRecords.firstNotNullOfOrNull { block ->
+            when (block) {
+                is FaceInfo -> block.faceImageInfos.firstOrNull()?.let { ChipPhoto(it.imageInputStream.readBytes(), it.mimeType) }
+                is FaceImageDataBlock -> block.representationBlocks.firstNotNullOfOrNull { it.imageRepresentation2DBlock }
+                    ?.let { ChipPhoto(it.representationData2DInputStream.readBytes(), it.representationData2DInputMimeType) }
+                else -> null
+            }
+        }
+    }
+}
 
 /**
  * The chip's answer to an Active Authentication challenge, or why there is none. Stays on the
@@ -74,7 +96,9 @@ object CardReader {
                 }
                 ActiveAuthAnswer(dg15, aaChallenge, response.getOrNull(), ecOid, response.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" })
             }
-            return ChipData(dg1, sod, if (pace.isSuccess) "PACE" else "BAC", activeAuth)
+            // Some chips leave the photo out; the face match is skipped then.
+            val dg2 = runCatching { file(PassportService.EF_DG2) }.getOrNull()
+            return ChipData(dg1, sod, if (pace.isSuccess) "PACE" else "BAC", activeAuth, dg2)
         } finally {
             card.close()
         }

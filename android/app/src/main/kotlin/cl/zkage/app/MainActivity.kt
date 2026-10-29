@@ -27,7 +27,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import cl.zkage.verifier.ActiveAuth
 import cl.zkage.verifier.Presentation
 import cl.zkage.verifier.Report
@@ -67,11 +71,24 @@ class MainActivity : ComponentActivity() {
             val activeAuth: Result<ActiveAuth.Result>?,
             /** The key whose hash the chip signed: the proof must be bound to this one. */
             val deviceKey: DeviceKey,
+            /** DG2's photo, or why it could not be read; null if the chip has no DG2. */
+            val photo: Result<ChipPhoto>?,
+            /** The camera matched the chip photo, with liveness (decision 0007). */
+            val faceMatched: Boolean = false,
         ) : Screen {
             /** The chip's answer, if the proof can check it. */
             val provableAnswer: ActiveAuthAnswer?
                 get() = chip.activeAuth.takeIf { report.dg15HashValid == true && activeAuth?.getOrNull()?.provable == true }
+
+            /**
+             * A chip with a photo must match the person first; one without DG2 proves without
+             * it. The match is a local check: it does not enter the proof.
+             */
+            val faceReady: Boolean get() = photo == null || faceMatched
         }
+        /** The Ley 21.719 notice before the camera opens. */
+        data class FaceNotice(val done: Done) : Screen
+        data class Face(val done: Done, val photo: ChipPhoto) : Screen
         data class Failed(val message: String) : Screen
         data class Confirm(val request: Presentation.Request) : Screen
         data object Presenting : Screen
@@ -165,7 +182,8 @@ class MainActivity : ComponentActivity() {
             val aa = chip.activeAuth?.takeIf { it.response != null }?.let {
                 runCatching { ActiveAuth.verify(it.dg15, it.challenge, it.response!!, it.ecSignatureOid) }
             }
-            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1, dg15 = chip.activeAuth?.dg15), chip, aa, deviceKey)
+            val photo = chip.dg2?.let { dg2 -> runCatching { ChipPhoto.from(dg2) ?: error("DG2 has no face image") } }
+            Screen.Done(SodVerifier.verify(chip.sod, chip.dg1, dg15 = chip.activeAuth?.dg15, dg2 = chip.dg2), chip, aa, deviceKey, photo)
         } catch (e: Exception) {
             Screen.Failed("${e.javaClass.simpleName}: ${e.message}")
         }
@@ -189,6 +207,25 @@ class MainActivity : ComponentActivity() {
         } else {
             begin()
         }
+    }
+
+    /** Asks for the camera, then opens the face match; without it the proof cannot start. */
+    private fun matchFace(done: Screen.Done) {
+        val photo = done.photo?.getOrNull() ?: return
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            screen = Screen.Face(done, photo)
+        } else {
+            afterCamera = { granted ->
+                screen = if (granted) Screen.Face(done, photo) else Screen.Failed("Sin la cámara no se puede comparar tu cara con la foto del chip.")
+            }
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private var afterCamera: ((Boolean) -> Unit)? = null
+    private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        afterCamera?.invoke(granted)
+        afterCamera = null
     }
 
     private var afterPermission: (() -> Unit)? = null
@@ -226,6 +263,8 @@ class MainActivity : ComponentActivity() {
                     Screen.Waiting -> Text("Acerca la cédula a la parte trasera del teléfono y no la muevas.")
                     Screen.Reading -> Text("Leyendo el chip… no muevas la cédula.")
                     is Screen.Done -> Result(s)
+                    is Screen.FaceNotice -> FaceNotice(s.done)
+                    is Screen.Face -> FaceMatch(s)
                     is Screen.Failed -> {
                         Text("No se pudo leer", fontWeight = FontWeight.Bold)
                         Text(s.message)
@@ -282,6 +321,10 @@ class MainActivity : ComponentActivity() {
         if (s.chip.activeAuth != null) {
             Check("Chip original (Active Authentication)", r.dg15HashValid == true && s.activeAuth?.getOrNull()?.valid == true)
         }
+        if (s.photo != null) {
+            Check("Foto del chip (DG2) coincide con el SOD", r.dg2HashValid == true)
+            if (s.faceMatched) Check("Tu cara coincide con la foto del chip", true)
+        }
         Text("Detalles técnicos", fontWeight = FontWeight.Bold)
         Text(
             listOf(
@@ -295,6 +338,13 @@ class MainActivity : ComponentActivity() {
                 "Active Authentication (DG15): ${if (15 in r.dataGroups) "sí" else "no"}",
                 "Chip Authentication (DG14): ${if (14 in r.dataGroups) "sí" else "no"}",
                 *activeAuthLines(s).toTypedArray(),
+                when (val photo = s.photo) {
+                    null -> "Foto (DG2): el chip no la tiene"
+                    else -> photo.fold(
+                        { "Foto (DG2): ${it.mimeType}, ${it.bytes.size} B" },
+                        { "Foto (DG2): no se pudo leer (${it.message})" },
+                    )
+                },
                 "DG1: ${s.chip.dg1.size} B, SOD: ${s.chip.sod.size} B",
             ).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
@@ -303,10 +353,81 @@ class MainActivity : ComponentActivity() {
             if (s.provableAnswer == null) {
                 Text("La prueba no incluirá Active Authentication: el chip no la tiene o su respuesta no es una firma P-256 válida. Algunos verificadores pueden rechazarla.")
             }
-            Text("La prueba de conocimiento cero tarda entre uno y tres minutos y usa bastante memoria. Corre en segundo plano: puedes salir de la app.")
-            Button(onClick = { prove(s) }) { Text("Generar prueba") }
+            val photo = s.photo
+            when {
+                photo == null -> Text("Esta cédula no trae foto en el chip, así que no se compara tu cara.")
+                photo.isFailure || r.dg2HashValid != true ->
+                    Text("No se puede generar la prueba: la foto del chip no se pudo leer o no coincide con el SOD.")
+                !s.faceMatched -> {
+                    Text("Antes de generar la prueba, la app compara tu cara con la foto del chip. Es una comprobación local: no entra en la prueba.")
+                    Button(onClick = { screen = Screen.FaceNotice(s) }) { Text("Comparar mi cara") }
+                }
+            }
+            if (s.faceReady) {
+                Text("La prueba de conocimiento cero tarda entre uno y tres minutos y usa bastante memoria. Corre en segundo plano: puedes salir de la app.")
+                Button(onClick = { prove(s) }) { Text("Generar prueba") }
+            }
         }
         Button(onClick = { screen = Screen.Form }) { Text("Leer otra") }
+    }
+
+    /** What Ley 21.719 Art. 16 ter asks to tell before treating biometric data. */
+    @Composable
+    private fun FaceNotice(done: Screen.Done) {
+        Text("Comparar tu cara", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            listOf(
+                "Sistema: detección de caras YuNet y reconocimiento SFace (OpenCV Zoo), que corren en este teléfono.",
+                "Para qué: comprobar que quien genera la prueba es la persona de la foto del chip, con una prueba de vida que pide mirar de frente y girar la cabeza hacia cada lado.",
+                "Por cuánto tiempo: sólo mientras dura la comparación. La foto del chip y las imágenes de la cámara quedan en la memoria del teléfono y se descartan al terminar. No se guardan, no se envían y no entran en la prueba.",
+                "Tus derechos: como nada se guarda ni sale del teléfono, no queda un dato tuyo que pedir, corregir o borrar. Puedes no aceptar; en ese caso no se genera la prueba con esta cédula.",
+            ).joinToString("\n\n"),
+        )
+        Button(onClick = { matchFace(done) }) { Text("Acepto, abrir la cámara") }
+        Button(onClick = { screen = done }) { Text("No, volver") }
+    }
+
+    @Composable
+    private fun FaceMatch(s: Screen.Face) {
+        val check = remember(s) { FaceCheck(this, s.photo) }
+        DisposableEffect(check) { onDispose { check.close() } }
+        val state by check.state.collectAsState()
+        Text("Comparar tu cara", style = MaterialTheme.typography.headlineSmall)
+        AndroidView(
+            factory = { context -> PreviewView(context).also { check.start(this@MainActivity, it) } },
+            modifier = Modifier.fillMaxWidth().height(360.dp),
+        )
+        when (val st = state) {
+            FaceCheck.State.Loading -> Text("Cargando los modelos…")
+            is FaceCheck.State.Running -> {
+                Text(
+                    when {
+                        !st.faceFound -> "No se ve una cara: ponla dentro del recuadro."
+                        // Turned faces score lower against the frontal photo: only judge it facing ahead.
+                        st.turns.all { it } || st.center != null -> when {
+                            st.similarity < 0.363f -> "Mira de frente: esa cara aún no coincide con la foto del chip."
+                            st.confirm != null -> "Vuelve a mirar de frente (${st.confirm} de ${FaceCheck.CENTER_FRAMES})."
+                            else -> "Mira de frente a la cámara (${st.center} de ${FaceCheck.CENTER_FRAMES})."
+                        }
+                        else -> "Ahora gira la cabeza hacia cada lado, en cualquier orden."
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+                if (st.center == null && st.confirm == null) {
+                    // turns: image right, then left. The preview is mirrored, so the image's
+                    // right is the user's own left.
+                    val labels = listOf("Hacia tu izquierda", "Hacia tu derecha")
+                    labels.forEachIndexed { i, label -> Check(label, st.turns[i]) }
+                }
+                Text(
+                    "Similitud con la foto: ${"%.2f".format(st.similarity)} (desde 0,36 es la misma persona) · ${st.millis} ms por imagen",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            FaceCheck.State.Matched -> LaunchedEffect(Unit) { screen = s.done.copy(faceMatched = true) }
+            is FaceCheck.State.Failed -> Text(st.message)
+        }
+        Button(onClick = { screen = s.done }) { Text("Cancelar") }
     }
 
     /** Algorithm, size and outcome only: the DG15 key itself identifies the card. */

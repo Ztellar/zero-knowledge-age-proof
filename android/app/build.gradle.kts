@@ -25,6 +25,9 @@ android {
         compose = true
     }
 
+    // The face models of decision 0007, from prover/scripts/download-face-models.sh, with
+    // their licenses.
+    sourceSets["main"].assets.directories += "../../prover/facematch/models"
     // The mock card, for the instrumented tests. Never real card data.
     sourceSets["androidTest"].assets.directories += "../../prover/fixtures/out"
 
@@ -49,6 +52,9 @@ dependencies {
     implementation(libs.code.scanner)
     // The scanner pulls fragment 1.0.0, too old for registerForActivityResult.
     implementation(libs.fragment)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)

@@ -1,6 +1,8 @@
 # 0007 — Comparación de cara
 
-Fecha: 2026-10-29. Estado: **propuesta**, sin implementar. Sigue a la
+Fecha: 2026-10-29. Estado: **aceptada: B, partiendo del código de ZKPassport (E)**.
+Implementada el 2026-10-29 y probada con la cédula real en el S25: la cara coincidió, pasó la
+prueba de vida y después se generó la prueba. Sigue a la
 [0006](0006-active-authentication-in-proof.md).
 
 ## Contexto
@@ -13,7 +15,8 @@ vida y atestación del dispositivo ([plan](../plan.md#lo-que-zkpassport-ya-resue
 La foto está en DG2: ICAO 9303 la guarda ahí, normalmente en JPEG 2000. Su hash va en el
 SOD, así que la foto es tan auténtica como DG1.
 
-**Sin verificar:** que la cédula chilena traiga DG2, y en qué formato.
+La cédula real usada en las pruebas trae DG2, y la app la muestra como `image/jp2` (JPEG
+2000).
 
 ### Lo que hay que resolver
 
@@ -124,6 +127,56 @@ mostrar esa información antes de usar la cámara.
 
 Fuente: texto oficial de la Ley 21.719, en las fuentes de la skill `compliance-cl`.
 
+## Lo implementado
+
+Verificado el 2026-10-29.
+
+- **Núcleo:** [`prover/facematch`](../../prover/facematch/src/lib.rs), en Rust con
+  [`tract`](https://crates.io/crates/tract-onnx), que corre ONNX sin binarios nativos. Hace
+  la detección con YuNet, la alineación por 5 puntos, el embedding con SFace y la pose.
+  Decodifica la foto del chip en JPEG o JPEG 2000 con `jpeg2k` (port en Rust de OpenJPEG).
+  Los modelos los baja [`download-face-models.sh`](../../prover/scripts/download-face-models.sh),
+  fijados por revisión y sha256, junto con sus licencias.
+- **En la app:**
+  - comprueba que DG2 coincida con su hash en el SOD;
+  - muestra el aviso del Art. 16 ter antes de pedir la cámara;
+  - compara cada cuadro de la cámara frontal en
+    [`FaceCheck.kt`](../../android/app/src/main/kotlin/cl/zkage/app/FaceCheck.kt);
+  - no deja generar la prueba hasta que la cara coincide.
+
+  Una cédula sin DG2 genera la prueba sin comparar la cara. Nada de esto entra en la prueba.
+- **Prueba de vida:** mirar de frente, girar la cabeza hacia cada lado en cualquier orden y
+  volver a mirar de frente. Los cuadros de frente exigen la similitud completa (0,363); los
+  girados, 0,15. Si la cara se pierde por más de 10 cuadros, los giros se reinician. Detiene
+  una foto; no detiene un video ni una máscara.
+
+Diferencias con ZKPassport, cada una por algo medido en el S25:
+
+| ZKPassport | Aquí | Por qué |
+| --- | --- | --- |
+| Arriba, abajo, izquierda y derecha | Sólo izquierda y derecha | Mirando hacia arriba, la similitud con la foto frontal bajó a 0,18–0,28 y la prueba casi nunca terminaba. Arriba y abajo no agregan nada contra una foto |
+| Giro medido desde cero | Desde la pose de frente de cada persona | Una cara de frente no tiene pitch cero (−0,18 en los retratos de prueba) |
+| Umbral de giro de 0,23 | 0,15 de yaw | Con los puntos de YuNet, un giro claro llegó a 0,17–0,26 |
+| Pitch dividido por la distancia entre los ojos | Dividido por la altura de ojos a boca | Al girar, la distancia entre los ojos se achica y un giro se leía como levantar la cabeza |
+
+Medido en el S25:
+
+| Qué | Resultado |
+| --- | --- |
+| Tiempo por cuadro de 640 × 480 (detección y embedding) | Mediana de 65 a 96 ms en cinco sesiones (75, 95, 67, 96 y 65 ms) |
+| Prueba de vida completa con la cédula real | 65 cuadros |
+| Sesiones registradas antes del ajuste, reproducidas con la lógica final | Las cuatro se completan, entre los cuadros 57 y 138 |
+
+En el Mac, con los retratos de dominio público: 0,688 entre dos fotos de la misma persona,
+0,590 y 0,658 con una de ellas reducida al tamaño de una foto de chip (en gris y en JPEG
+2000), y 0,10 y 0,15 entre personas distintas.
+
+**Costo:** la APK de debug pasó de 137 a 200 MB. SFace pesa 38,7 MB y la librería creció
+16,7 MB por `tract` y el decodificador.
+
+**Sin medir:** la tasa de falsos rechazos y de falsos aceptados. Se probó con una persona y
+tres retratos públicos.
+
 ## Recomendación
 
 **D por ahora, y B si se quiere mostrar en la demo**, nunca como garantía para el
@@ -136,10 +189,12 @@ verificador.
   app y el README digan que es una ayuda local, no una prueba. Conviene hacerla partiendo del
   módulo Rust de ZKPassport (E), con modelos de licencia permisiva.
 
-Antes de implementar B:
+Decisión (2026-10-29): B, partiendo del código de ZKPassport (E), con YuNet y SFace. Lo que
+se pedía antes de implementarla:
 
-1. Confirmar que la cédula real trae DG2. La pantalla de resultado de la lectura ya muestra
-   "Data groups en el SOD", que son sólo números y no exponen datos personales.
-2. Medir el peso que agregan a la APK el modelo y el decodificador de JPEG 2000.
-3. Usar sólo cédulas de prueba en los tests, con fotos sintéticas o de bancos con licencia,
-   nunca la foto de la cédula real.
+1. Confirmar que la cédula real trae DG2: sí, en JPEG 2000.
+2. Medir el peso que agregan a la APK el modelo y el decodificador de JPEG 2000: 63 MB, de 137
+   a 200 MB.
+3. Usar sólo fotos con licencia en los tests, nunca la foto de la cédula real: los tests usan
+   retratos de dominio público
+   ([`tests/faces`](../../prover/facematch/tests/faces/README.md)).

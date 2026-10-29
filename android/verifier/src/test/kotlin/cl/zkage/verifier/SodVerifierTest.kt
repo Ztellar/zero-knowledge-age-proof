@@ -68,6 +68,14 @@ class SodVerifierTest {
         assertTrue(SodVerifier.verify(sod, dg1, listOf(testCsca), LocalDate.of(2030, 1, 1)).expired)
     }
 
+    /** The mock card has no photo: a DG2 handed in is not one the issuer signed. */
+    @Test
+    fun dg2MustBeInTheSod() {
+        val (sod, dg1) = fixture("sod.der") to fixture("dg1.bin")
+        assertNull(SodVerifier.verify(sod, dg1).dg2HashValid)
+        assertFalse(SodVerifier.verify(sod, dg1, dg2 = byteArrayOf(0x75, 0)).dg2HashValid!!)
+    }
+
     @Test
     fun chipWrappedSodIsAccepted() {
         val len = sod.size

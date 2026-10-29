@@ -171,6 +171,10 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    cédula firmada por CHL 2021 RSA3072, prueba del 2026-10-29, con el chip de la cédula
    presente").
    **README hecho** (2026-10-29): mapa post-cuántico, mediciones, límites y demo.
+   **Comparación de cara hecha** (2026-10-29,
+   [decisión 0007](decisions/0007-face-match.md)): YuNet y SFace en el teléfono, con prueba
+   de vida, antes de generar la prueba. Es una comprobación local y no entra en la prueba.
+   Probada con la cédula real en el S25.
 
 ## Riesgos
 

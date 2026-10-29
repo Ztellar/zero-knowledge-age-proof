@@ -11,6 +11,8 @@ crate-type = ["cdylib"]
 [dependencies]
 age-core = { path = "../core" }
 bincode = "1"
+facematch = { path = "../facematch" }
+image = { version = "=0.25.10", default-features = false }
 jni = { version = "=0.21.1", default-features = false }
 methods = { path = "../methods" }
 # In-process prover: there is no r0vm on Android.

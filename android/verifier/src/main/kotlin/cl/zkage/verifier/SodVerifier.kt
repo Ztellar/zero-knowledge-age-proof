@@ -41,6 +41,8 @@ data class Report(
     val dataGroups: List<Int>,
     /** DG15 read from the chip matches its SOD hash; null if it was not read. */
     val dg15HashValid: Boolean?,
+    /** DG2, the face photo, matches its SOD hash; null if it was not read (decision 0007). */
+    val dg2HashValid: Boolean? = null,
     val adult: Boolean,
     val expired: Boolean,
 ) {
@@ -63,6 +65,7 @@ object SodVerifier {
         today: LocalDate = LocalDate.now(ZoneOffset.UTC),
         minAge: Int = 18,
         dg15: ByteArray? = null,
+        dg2: ByteArray? = null,
     ): Report {
         val signed = try {
             CMSSignedData(unwrapSod(sod))
@@ -113,6 +116,7 @@ object SodVerifier {
             dataGroupHashAlgorithm = name(hashAlg.id),
             dataGroups = hashes.map { it.dataGroupNumber }.sorted(),
             dg15HashValid = dg15?.let { hashValid(15, it) ?: false },
+            dg2HashValid = dg2?.let { hashValid(2, it) ?: false },
             adult = Mrz.isAtLeast(dates.birth, today, minAge),
             expired = !dates.expiry.isAfter(today),
         )

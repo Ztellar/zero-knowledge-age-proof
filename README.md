@@ -16,12 +16,16 @@ de edad con documentos, con sistemas de pruebas que no son post-cuánticos.
 
 ## Cómo funciona
 
-1. **Lectura.** La app lee DG1 (el MRZ), DG15 y el SOD del chip por PACE, y le pide al chip
-   que firme el inicio del hash de la clave del teléfono (Active Authentication).
-2. **Prueba, una vez.** El probador corre en el teléfono, en un servicio en segundo plano,
+1. **Lectura.** La app lee DG1 (el MRZ), DG2 (la foto), DG15 y el SOD del chip por PACE, y le
+   pide al chip que firme el inicio del hash de la clave del teléfono (Active Authentication).
+2. **Comparación de cara.** Si la cédula trae foto, la app la compara con la cámara frontal,
+   con una prueba de vida, antes de dejar generar la prueba. Es una comprobación local: no
+   entra en la prueba y no le promete nada al verificador
+   ([decisión 0007](docs/decisions/0007-face-match.md)).
+3. **Prueba, una vez.** El probador corre en el teléfono, en un servicio en segundo plano,
    y guarda la prueba en el almacenamiento privado de la app
    ([decisión 0004](docs/decisions/0004-prove-once-present-many.md)).
-3. **Presentación, muchas veces.** El verificador web muestra un QR con un desafío. La app lo
+4. **Presentación, muchas veces.** El verificador web muestra un QR con un desafío. La app lo
    escanea y envía la prueba guardada más una firma ML-DSA-65 sobre
    `"zkage-presentation-v1" || origen || desafío`
    ([decisión 0005](docs/decisions/0005-web-verifier-with-qr.md)).
@@ -80,17 +84,17 @@ corrida; las condiciones están en [`docs/measurements/`](docs/measurements).
 - **Las presentaciones se pueden enlazar.** Todos los verificadores reciben la misma prueba y
   la misma clave pública, así que dos verificadores que junten sus datos saben que fue la
   misma persona, aunque no sepan quién ([decisión 0004](docs/decisions/0004-prove-once-present-many.md)).
-- **La prueba demuestra que el chip estaba presente, no que lo usó su dueño.** No hay
-  comparación de cara.
-  > ⚠️ La comparación de cara **no está implementada**. El estudio de cómo hacerla está en la
-  > [decisión 0007](docs/decisions/0007-face-match.md), que todavía es una propuesta.
+- **La prueba demuestra que el chip estaba presente, no que lo usó su dueño.** La app
+  compara la cara con la foto del chip, pero quien compile el código sin esa comprobación
+  genera pruebas igual de válidas. Además, la prueba de vida detiene una foto, no un video ni
+  una máscara ([decisión 0007](docs/decisions/0007-face-match.md)).
 - **El ligado del chip a la clave del teléfono es de 64 bits**: el desafío de Active
   Authentication mide 8 bytes ([decisión 0006](docs/decisions/0006-active-authentication-in-proof.md)).
 - **Sólo se probó en un teléfono**, un Galaxy S25 con 12 GB de RAM. Un teléfono de gama
   media o antiguo, o el límite de memoria por app de Android 17, pueden hacer que la prueba
   tarde mucho más o no termine: no se ha medido.
-- **La APK de debug pesa 137 MB** con una compilación limpia. 87 MB son la librería del
-  probador.
+- **La APK de debug pesa 200 MB** con una compilación limpia. 104 MB son la librería del
+  probador y la comparación de cara, y 39 MB los modelos de cara.
 - **Las cédulas aceptadas son las chilenas**, contra las 4 CSCA de Chile en
   [`ChileCsca.kt`](android/verifier/src/main/kotlin/cl/zkage/verifier/ChileCsca.kt). Las
   claves vienen del registro público de ZKPassport.
@@ -118,8 +122,16 @@ Corre 28 tests con la cédula de prueba de
 esa variable el image ID no es el del programa y los tests de presentación fallan con
 `Err(Proof)`.
 
-**Tests de Kotlin**, el lector de cédula, la Active Authentication, ML-DSA y la elección de
-segmento (30 tests):
+**Comparación de cara** (unos 3 minutos la primera vez, por la compilación): baja los modelos
+y prueba con retratos de dominio público.
+
+```sh
+prover/scripts/download-face-models.sh
+cd prover && cargo test --release -p facematch
+```
+
+**Tests de Kotlin**, el lector de cédula, la Active Authentication, ML-DSA, la foto del chip y
+la elección de segmento (33 tests):
 
 ```sh
 cd android
@@ -137,9 +149,10 @@ cargo run --release -p host -- succinct
 
 ## Demo con una cédula y un teléfono
 
-1. Compila la librería del probador y la app, e instálala:
+1. Baja los modelos de cara, compila la librería del probador y la app, e instálala:
 
    ```sh
+   prover/scripts/download-face-models.sh
    prover/scripts/build-android-lib.sh
    cd android && JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :app:assembleDebug
    adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -158,8 +171,8 @@ cargo run --release -p host -- succinct
    El servidor acepta además `--trust-mock`, para la CSCA de prueba, y `--allow-no-chip`, para
    pruebas sin Active Authentication.
 3. En la app, escribe el número de documento y las fechas de nacimiento y de vencimiento
-   (`AAMMDD`), toca "Leer cédula", acerca la cédula y, en el resultado, toca "Generar
-   prueba".
+   (`AAMMDD`), toca "Leer cédula" y acerca la cédula. En el resultado, toca "Comparar mi
+   cara" y, cuando coincida, "Generar prueba".
 4. Abre https://127.0.0.1:8443 en el computador, acepta el certificado autofirmado y escanea
    el QR con "Presentar mi prueba".
 
@@ -175,8 +188,9 @@ emulador (`ANDROID_SERIAL=emulator-5554`).
 | [`prover/host`](prover/host) | Probador de línea de comandos, para el computador y las mediciones por `adb` |
 | [`prover/ffi`](prover/ffi) | El probador como librería JNI para la app |
 | [`prover/verifier`](prover/verifier), [`prover/verifier-web`](prover/verifier-web) | La librería que verifica presentaciones y el servidor web con QR |
+| [`prover/facematch`](prover/facematch) | Comparación de cara y prueba de vida, adaptadas del código de ZKPassport |
 | [`prover/fixtures`](prover/fixtures) | Generador de la cédula de prueba. Las claves son desechables |
-| [`android/app`](android/app) | La app: lectura NFC con JMRTD, clave del teléfono, servicio del probador, presentación |
+| [`android/app`](android/app) | La app: lectura NFC con JMRTD, comparación de cara, clave del teléfono, servicio del probador, presentación |
 | [`android/verifier`](android/verifier) | Verificación en Kotlin de la cédula, de Active Authentication y de ML-DSA |
 
 ## Documentación
@@ -184,9 +198,11 @@ emulador (`ANDROID_SERIAL=emulator-5554`).
 | Documento | Tipo |
 | --- | --- |
 | [`docs/plan.md`](docs/plan.md) | Plan por etapas y su estado |
-| [`docs/decisions/`](docs/decisions) | Decisiones, de la 0001 a la 0007 (esta última, una propuesta) |
+| [`docs/decisions/`](docs/decisions) | Decisiones, de la 0001 a la 0007 |
 | [`docs/measurements/`](docs/measurements) | Mediciones, con fecha y condiciones |
 
 ## Licencia
 
 [Apache-2.0](LICENSE). Las dependencias tienen su propia licencia; JMRTD y SCUBA son LGPL.
+YuNet es MIT y SFace Apache-2.0; el script de descarga guarda sus licencias junto a los
+modelos.
