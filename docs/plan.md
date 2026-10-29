@@ -2,11 +2,9 @@
 
 Fecha: 2026-10-22.
 
-Estado: **etapa 4 hecha, sigue la 5** (2026-10-26): el probador corre en el computador y en el S25 con
-una cédula de prueba; resultados en `measurements/stage-1-desktop.md` y
-`measurements/stage-2-android.md`. La app lee la cédula real, verifica sus firmas y genera la prueba STARK en el teléfono,
-en un servicio en segundo plano (135 s fuera de la app, 51,5 s con la app en pantalla),
-ligada a una clave ML-DSA-65 del teléfono.
+Estado: **etapas 1 a 5 hechas** (2026-10-29). La app lee la cédula real, genera la prueba
+STARK en el teléfono con Active Authentication del chip, y el verificador web la acepta.
+Qué hace hoy el proyecto, sus límites y cómo correrlo: [README](../README.md).
 
 ## Objetivo
 
@@ -18,18 +16,15 @@ teléfono.
 
 ## Qué es post-cuántico y qué no
 
-| Capa | Algoritmo | ¿Post-cuántico? |
-| --- | --- | --- |
-| Firma del Registro Civil (CSCA → DSC → SOD) | RSA 3072/4096 con SHA-256 | **No, y no depende de nosotros.** Se documenta como límite |
-| Prueba de conocimiento cero | STARK (sólo funciones hash) | **Sí** (se considera resistente). Es la pieza central |
-| Firma de la clave del dispositivo (versión futura) | ML-DSA, FIPS 204 | Sí, si el teléfono lo soporta; no verificado |
-| OPRF del registro (en pausa) | Curvas elípticas | No: las versiones post-cuánticas son investigación |
+La tabla vigente está en el [README](../README.md#qué-es-post-cuántico-y-qué-no).
 
 ## Qué prueba la prueba
 
 Entradas privadas: DG1 (los datos del MRZ), el SOD (los hashes firmados y su firma) y el
 certificado DSC. Entradas públicas: la fecha del día D y la clave de una CSCA chilena.
-Salida: "mayor de 18 en D".
+Salida: "mayor de 18 en D". Diseño inicial; la lista vigente de comprobaciones, con la clave
+del teléfono y la Active Authentication de la decisión 0006, está en el
+[README](../README.md#cómo-funciona).
 
 El circuito comprueba:
 
@@ -42,14 +37,14 @@ El circuito comprueba:
 Trampas conocidas:
 - **El año de nacimiento viene con dos dígitos** (`YYMMDD`): el siglo se resuelve contra D.
 - **D es entrada pública**, y quien verifica rechaza fechas viejas.
-- **Esquema de firma sin confirmar:** RSA PKCS#1 v1.5 o PSS. Se ve al leer una cédula real
-  (etapa 3).
+- **Esquema de firma:** RSA PKCS#1 v1.5, confirmado con la cédula real en la etapa 3.
 
 ## Stack
 
 - **App:** Kotlin nativo. Lectura NFC con [JMRTD](https://jmrtd.org) (Java, maduro,
   soporta BAC y PACE).
-- **Núcleo criptográfico:** Rust, llamado desde Kotlin con UniFFI.
+- **Núcleo criptográfico:** Rust, llamado desde Kotlin por JNI escrito a mano
+  ([`prover/ffi`](../prover/ffi/src/lib.rs)), no UniFFI.
 - **Sistema de pruebas, candidato:** [RISC Zero](https://github.com/risc0/risc0)
   (Apache-2.0). Se programa en Rust normal y tiene aceleración para RSA y SHA-256. Su
   prueba STARK no debe envolverse en Groth16, que no es post-cuántico. **Alternativa** si
@@ -175,7 +170,7 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    abierta y segmento de 2^19, 223.778 B; el verificador web la aceptó ("Mayor de 18,
    cédula firmada por CHL 2021 RSA3072, prueba del 2026-10-29, con el chip de la cédula
    presente").
-   **Falta:** el README.
+   **README hecho** (2026-10-29): mapa post-cuántico, mediciones, límites y demo.
 
 ## Riesgos
 
@@ -183,7 +178,7 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
 | --- | --- |
 | RISC Zero no compila o no corre en Android | Descartado en la etapa 2: corre en el S25 |
 | Android 17 mata la app por su límite de memoria por app mientras prueba | Sin medir: el emulador no aplica el límite; se verá en el S25 con Android 17 (`am memory-limiter status`) |
-| Generar la prueba tarda minutos en el teléfono | Tarda 65 s en el S25; un teléfono de gama media puede tardar más o quedarse sin memoria (sin medir) |
+| Generar la prueba tarda minutos en el teléfono | Con Active Authentication tarda 92,5 s en la app y 128,6 s por `adb` en el S25; con poca RAM la app usa segmentos más chicos (366 s con 2^17 en el S25). Gama media o antigua sin medir |
 | La prueba pesa demasiado para un QR | El verificador la recibe por archivo o por red en la primera versión |
 | Leer datos reales de cédulas en tests | Los tests usan sólo documentos de prueba; la cédula real sólo en el teléfono de desarrollo |
 
