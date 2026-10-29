@@ -82,7 +82,8 @@ corrida; las condiciones están en [`docs/measurements/`](docs/measurements).
   misma persona, aunque no sepan quién ([decisión 0004](docs/decisions/0004-prove-once-present-many.md)).
 - **La prueba demuestra que el chip estaba presente, no que lo usó su dueño.** No hay
   comparación de cara.
-  > ⚠️ La comparación de cara **no está implementada**.
+  > ⚠️ La comparación de cara **no está implementada**. El estudio de cómo hacerla está en la
+  > [decisión 0007](docs/decisions/0007-face-match.md), que todavía es una propuesta.
 - **El ligado del chip a la clave del teléfono es de 64 bits**: el desafío de Active
   Authentication mide 8 bytes ([decisión 0006](docs/decisions/0006-active-authentication-in-proof.md)).
 - **Sólo se probó en un teléfono**, un Galaxy S25 con 12 GB de RAM. Un teléfono de gama
@@ -183,7 +184,7 @@ emulador (`ANDROID_SERIAL=emulator-5554`).
 | Documento | Tipo |
 | --- | --- |
 | [`docs/plan.md`](docs/plan.md) | Plan por etapas y su estado |
-| [`docs/decisions/`](docs/decisions) | Decisiones, de la 0001 a la 0006 |
+| [`docs/decisions/`](docs/decisions) | Decisiones, de la 0001 a la 0007 (esta última, una propuesta) |
 | [`docs/measurements/`](docs/measurements) | Mediciones, con fecha y condiciones |
 
 ## Licencia
