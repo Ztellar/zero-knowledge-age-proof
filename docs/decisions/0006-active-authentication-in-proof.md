@@ -1,7 +1,9 @@
 # 0006 — Active Authentication dentro de la prueba
 
 Fecha: 2026-10-26. Estado: aceptada. **Implementada** (2026-10-26) y probada con la cédula
-de prueba en el Mac y en el S25. **Falta** probarla con la cédula real. Complementa la
+de prueba en el Mac y en el S25. **Probada con la cédula real** (S25, 2026-10-29): prueba
+con el chip autenticado en 92,5 s con segmento de 2^19, 223.778 B, aceptada por el
+verificador web ("…con el chip de la cédula presente"). Complementa la
 [0004](0004-prove-once-present-many.md).
 
 ## Contexto

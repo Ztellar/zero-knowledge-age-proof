@@ -170,7 +170,11 @@ Cada etapa tiene un criterio de salida. Si no se cumple, se revisa el plan antes
    [decisión 0006](decisions/0006-active-authentication-in-proof.md)): el chip firma el
    inicio del hash de la clave del teléfono y el programa lo comprueba. Duplica el tiempo de
    la prueba; el tamaño del segmento se elige según la RAM del teléfono
-   ([medición](measurements/active-auth.md)). **Falta** probarla con la cédula real.
+   ([medición](measurements/active-auth.md)). **Con la cédula real en el S25**
+   (2026-10-29): "Chip original (Active Authentication, P-256): sí", 92,5 s con la app
+   abierta y segmento de 2^19, 223.778 B; el verificador web la aceptó ("Mayor de 18,
+   cédula firmada por CHL 2021 RSA3072, prueba del 2026-10-29, con el chip de la cédula
+   presente").
    **Falta:** el README.
 
 ## Riesgos
