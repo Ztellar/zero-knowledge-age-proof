@@ -209,8 +209,11 @@ casi inmediata, sin tiempos medidos.
 Revisado el 2026-10-22 en
 [zkpassport-docs](https://github.com/zkpassport/zkpassport-docs) (commit `a41aa5f`) y
 [zkpassport-packages](https://github.com/zkpassport/zkpassport-packages) (commit `fac2812`).
-La app móvil no es código abierto todavía: lo que hace se infiere de la documentación y del
-SDK.
+En esa revisión no se encontró el código de la app, y lo que hace se infirió de la
+documentación y del SDK. **Corrección (2026-10-29):** la app sí está publicada, en
+[mobile-app](https://github.com/zkpassport/mobile-app) (Apache-2.0, un solo push el
+2026-07-17, commit `c52f5ef`). Su comparación de cara se revisa en la
+[decisión 0007](decisions/0007-face-match.md).
 
 | Lo que diseñamos (0001, 0002) | ZKPassport |
 | --- | --- |

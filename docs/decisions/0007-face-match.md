@@ -70,6 +70,34 @@ asocian a la app oficial, sin modificar. El verificador comprueba esa atestació
 Se deja documentado como límite: la prueba demuestra que el chip estaba presente, no que lo
 usó su dueño.
 
+### E. Reusar la implementación de ZKPassport
+
+ZKPassport publicó su app en [mobile-app](https://github.com/zkpassport/mobile-app)
+(Apache-2.0, commit `c52f5ef`, un solo push el 2026-07-17, así que puede no ser la versión que
+está en las tiendas). Lo revisado:
+
+- **El código es reusable.** El módulo
+  [`modules/facematch/rust`](https://github.com/zkpassport/mobile-app/tree/main/modules/facematch/rust)
+  es Rust con [`ort`](https://crates.io/crates/ort) (ONNX Runtime) y hace la detección
+  (entrada de 640 × 640), la alineación por 5 puntos a 112 × 112 y el embedding. También
+  calcula la pose de la cabeza en `pose.rs`. La prueba de vida pide girar la cabeza en las
+  direcciones que muestra la pantalla (`LIVENESS_SCHEDULE` en `FaceMatch.tsx`). Su licencia es
+  compatible con la de este proyecto, siempre que se conserve la atribución.
+- **Los modelos no vienen en el repo.** [su script de descarga](https://github.com/zkpassport/mobile-app/blob/main/scripts/download-facematch-models.sh) los baja de
+  `cdn.zkpassport.id`: `scrfd_2.5g_bnkps.ort` y `arcface.ort`. SCRFD 2.5G es un detector de
+  InsightFace, cuyos modelos son sólo para investigación no comercial. El origen de
+  `arcface.ort` no está declarado; por el nombre y el formato es probable que también sea de
+  InsightFace (sin verificar). Usarlos aquí obligaría a bajarlos aparte con esa restricción,
+  igual que hace ZKPassport, y no se podrían publicar bajo Apache-2.0.
+- **La garantía para el verificador la da la atestación**, no la comparación:
+  [`modules/app-attest-module`](https://github.com/zkpassport/mobile-app/tree/main/modules/app-attest-module)
+  usa Play Integrity en Android y App Attest en iOS. Sin eso, reusar su código deja a este
+  proyecto en la opción B.
+
+Así que E es una forma de hacer B, no una opción aparte: su código con YuNet y SFace en vez de
+los modelos de InsightFace. Hay que revisar si el preprocesamiento coincide, porque SFace
+también usa caras alineadas de 112 × 112, pero puede normalizar distinto (sin verificar).
+
 ## Modelos abiertos revisados (2026-10-29)
 
 Las licencias se leyeron en la página del modelo; no se revisaron los términos de los datos
@@ -105,7 +133,8 @@ verificador.
 - C le da garantía al verificador, pero a cambio de lo que hace distinto al proyecto: código
   abierto que cualquiera puede compilar, y post-cuántico en lo que depende de él.
 - B sirve para el portfolio, con detección y reconocimiento en el teléfono, siempre que la
-  app y el README digan que es una ayuda local, no una prueba.
+  app y el README digan que es una ayuda local, no una prueba. Conviene hacerla partiendo del
+  módulo Rust de ZKPassport (E), con modelos de licencia permisiva.
 
 Antes de implementar B:
 
