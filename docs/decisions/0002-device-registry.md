@@ -1,55 +1,55 @@
-# 0002 — Registro de teléfonos propio, sin blockchain, revalidación anual
+# 0002 — Our own phone registry, no blockchain, yearly revalidation
 
-Fecha: 2026-10-22. Estado: en pausa desde la [decisión 0003](0003-android-app-post-quantum-proof.md). **No implementada.** Complementa la
-[decisión 0001](0001-credential-without-personal-data.md).
+Date: 2026-10-22. Status: on hold since [decision 0003](0003-android-app-post-quantum-proof.md). **Not implemented.** Complements
+[decision 0001](0001-credential-without-personal-data.md).
 
-## Decisión
+## Decision
 
-- El registro "un carnet, un teléfono" vive en un servidor propio, no en una blockchain.
-- El código por carnet se deriva con OPRF: el servidor nunca ve el carnet y el código no se
-  puede calcular sin la clave secreta del servidor y el carnet físico a la vez.
-- Cambiar de teléfono: con el teléfono anterior a mano, un código de traspaso; sin él,
-  volver a apoyar el carnet y una espera de 7 días en que el teléfono anterior puede
-  rechazar el cambio.
-- La credencial se revalida cada 12 meses, o antes si vence el carnet.
+- The "one ID card, one phone" registry lives on our own server, not on a blockchain.
+- The per-card code is derived with an OPRF: the server never sees the ID card, and the code
+  cannot be computed without both the server's secret key and the physical ID card.
+- Changing phones: with the old phone at hand, a transfer code; without it, tapping the ID
+  card again plus a 7-day wait during which the old phone can reject the change.
+- The credential is revalidated every 12 months, or earlier if the ID card expires.
 
-## Por qué
+## Why
 
-- Impedir que un carnet esté en dos teléfonos exige guardar algo fuera del teléfono nuevo:
-  el teléfono nuevo no tiene forma de saber que existe el anterior, y el chip del carnet no
-  se puede escribir. Lo mínimo es un código por carnet y la clave del teléfono activo.
-- Blockchain descartada. Lo que se publica ahí es permanente, copiable por
-  cualquiera y no se puede borrar: si algún día el código se puede calcular desde un carnet,
-  el daño no tiene arreglo, y choca con el derecho de supresión de la Ley 21.719. Además las
-  transacciones dejan metadatos (hora, billetera que paga).
-- Un servidor propio permite borrar y corregir. Sólo decide qué teléfono está activo: no
-  puede hacer pasar a nadie por mayor de edad, porque eso lo prueba la firma del chip.
+- Stopping an ID card from being on two phones requires storing something outside the new
+  phone: the new phone has no way of knowing the old one exists, and the ID card's chip
+  cannot be written. The minimum is a per-card code and the active phone's key.
+- Blockchain rejected. What is published there is permanent, copyable by anyone and cannot
+  be erased: if the code ever becomes computable from an ID card, the damage cannot be
+  undone, and it clashes with the right to erasure under Law 21.719. Transactions also leave
+  metadata (time, paying wallet).
+- Our own server allows erasing and correcting. It only decides which phone is active: it
+  cannot make anyone pass as an adult, because the chip's signature proves that.
 
-## Encaje en la Ley 21.719
+## Fit with Chilean Law 21.719
 
-Revisado el 2026-10-22 contra el texto del Diario Oficial (`ley-21719-texto.txt` de la skill
-`compliance-cl`). No constituye asesoría legal.
+Reviewed on 2026-10-22 against the text published in the Diario Oficial
+(`ley-21719-texto.txt` from the `compliance-cl` skill). This is not legal advice.
 
-- **El código cuenta como dato personal seudonimizado, no anonimizado.** La anonimización
-  exige un procedimiento "irreversible" que destruya el nexo (art. 2 letra k). Acá el nexo
-  existe a propósito: con la clave del servidor y el carnet se recalcula el código, que es
-  justo como se detectan duplicados. Calza con la seudonimización (art. 2 letra l), donde
-  la información adicional "figure por separado" y esté protegida. La clave pública del
-  teléfono y las fechas asociadas corren la misma suerte.
-- **Obligaciones para el registro** (somos responsables de datos):
-  - base de licitud: consentimiento al registrarse (art. 12);
-  - informar qué se guarda y para qué (art. 14 ter);
-  - proporcionalidad y conservación limitada (art. 3 letra c): borrar el código cuando la
-    credencial vence sin renovarse;
-  - seguridad (art. 14 quinquies, que nombra la seudonimización como medida) y protección
-    desde el diseño (art. 14 quáter): el diseño ya apunta ahí;
-  - reportar vulneraciones (art. 14 sexies);
-  - derechos del titular, en particular la supresión: la persona apoya el carnet en la app,
-    se recalcula su código y se borra.
-- **Evaluación de impacto:** obligatoria en "tratamiento masivo de datos o a gran escala"
-  (art. 15 ter letra b). Si apunta a todo Chile, hacerla antes de lanzar.
-- **Regla de diseño derivada:** registrar el código sólo después de que la prueba de edad
-  salga positiva. Así el registro nunca contiene códigos de menores.
-- **Sin resolver por el texto:** si somos responsables de lo que la app procesa dentro del
-  teléfono sin recibirlo nunca (nombre, RUT, fecha). Por prudencia, informarlo igual en la
-  política de privacidad. `[verificar contra fuente oficial]`
+- **The code counts as pseudonymized personal data, not anonymized.** Anonymization requires
+  an "irreversible" procedure that destroys the link (art. 2 letter k). Here the link exists
+  on purpose: with the server's key and the ID card the code is recomputed, which is exactly
+  how duplicates are detected. It fits pseudonymization (art. 2 letter l), where the
+  additional information is kept separately ("figure por separado") and protected. The
+  phone's public key and the associated dates are treated the same way.
+- **Obligations for the registry** (we are data controllers):
+  - lawful basis: consent at registration (art. 12);
+  - informing what is stored and why (art. 14 ter);
+  - proportionality and limited retention (art. 3 letter c): erase the code when the
+    credential expires without renewal;
+  - security (art. 14 quinquies, which names pseudonymization as a measure) and data
+    protection by design (art. 14 quáter): the design already aims there;
+  - reporting breaches (art. 14 sexies);
+  - data subject rights, in particular erasure: the person taps the ID card in the app, the
+    code is recomputed and erased.
+- **Impact assessment:** mandatory for "tratamiento masivo de datos o a gran escala"
+  (massive or large-scale processing, art. 15 ter letter b). If it targets all of Chile, do
+  it before launch.
+- **Derived design rule:** register the code only after the age proof comes out positive.
+  That way the registry never holds codes of minors.
+- **Not settled by the text:** whether we are responsible for what the app processes inside
+  the phone without ever receiving it (name, RUT, date of birth). Out of caution, disclose it
+  in the privacy policy anyway. `[verify against official source]`

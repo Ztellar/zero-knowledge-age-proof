@@ -1,205 +1,204 @@
-# 0007 — Comparación de cara
+# 0007 — Face match
 
-Fecha: 2026-10-29. Estado: **aceptada: B, partiendo del código de ZKPassport (E)**.
-Implementada el 2026-10-29 y probada con la cédula real en el S25: la cara coincidió, pasó la
-prueba de vida y después se generó la prueba. Sigue a la
+Date: 2026-10-29. Status: **accepted: B, starting from ZKPassport's code (E)**. Implemented
+on 2026-10-29 and tested with the real ID card on the S25: the face matched, the liveness
+check passed, and then the proof was made. Follows
 [0006](0006-active-authentication-in-proof.md).
 
-## Contexto
+## Context
 
-Con la 0006, la prueba demuestra que el chip de la cédula estaba junto al teléfono, pero no
-que lo usó su dueño: quien tenga la cédula de otra persona en la mano puede generar su
-prueba. ZKPassport compara la cara de quien usa la app con la foto del chip, con prueba de
-vida y atestación del dispositivo ([plan](../plan.md#lo-que-zkpassport-ya-resuelve)).
+With 0006, the proof shows that the ID card's chip was next to the phone, but not that its
+owner used it: whoever holds someone else's ID card can make that person's proof. ZKPassport
+compares the face of whoever uses the app with the chip's photo, with a liveness check and
+device attestation ([plan](../plan.md#what-zkpassport-already-solves)).
 
-La foto está en DG2: ICAO 9303 la guarda ahí, normalmente en JPEG 2000. Su hash va en el
-SOD, así que la foto es tan auténtica como DG1.
+The photo is in DG2: ICAO 9303 stores it there, usually as JPEG 2000. Its hash is in the
+SOD, so the photo is as authentic as DG1.
 
-La cédula real usada en las pruebas trae DG2, y la app la muestra como `image/jp2` (JPEG
+The real ID card used in the tests carries DG2, and the app shows it as `image/jp2` (JPEG
 2000).
 
-### Lo que hay que resolver
+### What has to be solved
 
-1. **¿Quién le cree al resultado?** La cara de quien usa la app la toma la cámara, y ni el
-   Registro Civil ni el chip firman esa imagen. Nada impide que una app modificada le pase al
-   comparador la propia foto de DG2 como si fuera la cámara.
-2. **¿Dónde corre?** En el teléfono, sin red, como todo lo demás.
-3. **¿Con qué modelo?** Tiene que ser de código y pesos abiertos, con una licencia que
-   permita publicarlo.
+1. **Who believes the result?** The face of whoever uses the app comes from the camera, and
+   neither the Civil Registry nor the chip signs that image. Nothing stops a modified app from
+   feeding the comparator DG2's own photo as if it came from the camera.
+2. **Where does it run?** On the phone, offline, like everything else.
+3. **With which model?** It must have open code and weights, under a license that allows
+   publishing it.
 
-## Opciones
+## Options
 
-### A. Dentro de la prueba
+### A. Inside the proof
 
-El programa de RISC Zero leería DG2, comprobaría su hash contra el SOD y correría la red de
-reconocimiento sobre la foto del chip y sobre la de la cámara.
+The RISC Zero program would read DG2, check its hash against the SOD, and run the
+recognition network on the chip's photo and on the camera's.
 
-- **No agrega seguridad.** La foto de la cámara es una entrada privada que nadie firma, así
-  que una app modificada pasa DG2 dos veces y el resultado es siempre "coincide".
-- **Es inviable de costo.** MobileFaceNet hace unos 221 millones de multiplicaciones y sumas
-  por imagen (Chen et al., 2018). Suponiendo 10 ciclos por operación en el zkVM, que no
-  tiene unidad de punto flotante (supuesto sin medir), son 2 × 221 × 10⁶ × 10 ≈ 4,4 × 10⁹
-  ciclos. Eso es 4,4 × 10⁹ / 379.900 ≈ 11.600 veces el programa actual, que ya tarda 92,5 s
-  en el S25: más de un día. A eso se suma decodificar JPEG 2000.
+- **It adds no security.** The camera photo is a private input nobody signs, so a modified
+  app passes DG2 twice and the result is always "match".
+- **Its cost is not viable.** MobileFaceNet does about 221 million multiply-adds per image
+  (Chen et al., 2018). Assuming 10 cycles per operation in the zkVM, which has no
+  floating-point unit (an unmeasured assumption), that is 2 × 221 × 10⁶ × 10 ≈ 4.4 × 10⁹
+  cycles. That is 4.4 × 10⁹ / 379,900 ≈ 11,600 times the current program, which already
+  takes 92.5 s on the S25: more than a day. Decoding JPEG 2000 comes on top.
 
-### B. En la app, fuera de la prueba, como ayuda al usuario honesto
+### B. In the app, outside the proof, as help for the honest user
 
-La app compara la cámara con DG2 antes de generar la prueba y se niega a generarla si no
-coinciden. El resultado no entra en el `Claim` y el verificador no recibe nada nuevo.
+The app compares the camera with DG2 before making the proof and refuses to make it if they
+do not match. The result does not enter the `Claim` and the verifier receives nothing new.
 
-- **Protege del caso casual:** alguien que toma la cédula de otra persona y usa la app
-  publicada. No protege de quien compile la app sin esa comprobación, porque el código es
-  abierto.
-- **No le promete nada al verificador**, y así se documenta. Dice lo mismo que hoy.
-- **Cuesta:** leer DG2, decodificar JPEG 2000 en Android, un detector de caras y un modelo
-  de reconocimiento dentro de la APK, que ya pesa 137 MB.
+- **It protects against the casual case:** someone who takes another person's ID card and
+  uses the published app. It does not protect against someone who builds the app without
+  that check, because the code is open.
+- **It promises the verifier nothing**, and is documented that way. It says the same as
+  today.
+- **It costs:** reading DG2, decoding JPEG 2000 on Android, a face detector and a recognition
+  model inside the APK, which is already 137 MB.
 
-### C. En la app, con atestación del dispositivo
+### C. In the app, with device attestation
 
-Como B, pero el resultado se firma con una clave que Android Key Attestation o Play Integrity
-asocian a la app oficial, sin modificar. El verificador comprueba esa atestación.
+Like B, but the result is signed with a key that Android Key Attestation or Play Integrity
+tie to the official, unmodified app. The verifier checks that attestation.
 
-- **Es lo único que le da al verificador una garantía sobre la cara**, y es lo que hace
-  ZKPassport.
-- **Contradice el proyecto.** Quien compile el código abierto ya no tiene una app válida, y
-  la confianza pasa a Google y a la firma de quien publica la app. Además, la atestación usa
-  ECDSA o RSA, que no son post-cuánticos.
-- **Necesita prueba de vida**, porque si no basta mostrarle a la cámara una foto de la
-  cédula. Una prueba de vida seria, resistente a máscaras y a videos, es un producto en sí
-  mismo.
+- **It is the only option that gives the verifier a guarantee about the face**, and it is
+  what ZKPassport does.
+- **It contradicts the project.** Whoever builds the open code no longer has a valid app,
+  and trust moves to Google and to the signature of whoever publishes the app. Attestation
+  also uses ECDSA or RSA, which are not post-quantum.
+- **It needs a liveness check**, otherwise showing the camera a photo of the ID card is
+  enough. A serious liveness check, resistant to masks and videos, is a product in itself.
 
-### D. No comparar la cara
+### D. Do not match the face
 
-Se deja documentado como límite: la prueba demuestra que el chip estaba presente, no que lo
-usó su dueño.
+Documented as a limit: the proof shows that the chip was present, not that its owner used
+it.
 
-### E. Reusar la implementación de ZKPassport
+### E. Reuse ZKPassport's implementation
 
-ZKPassport publicó su app en [mobile-app](https://github.com/zkpassport/mobile-app)
-(Apache-2.0, commit `c52f5ef`, un solo push el 2026-07-17, así que puede no ser la versión que
-está en las tiendas). Lo revisado:
+ZKPassport published its app at [mobile-app](https://github.com/zkpassport/mobile-app)
+(Apache-2.0, commit `c52f5ef`, a single push on 2026-07-17, so it may not be the version in
+the stores). What was reviewed:
 
-- **El código es reusable.** El módulo
+- **The code is reusable.** The
   [`modules/facematch/rust`](https://github.com/zkpassport/mobile-app/tree/main/modules/facematch/rust)
-  es Rust con [`ort`](https://crates.io/crates/ort) (ONNX Runtime) y hace la detección
-  (entrada de 640 × 640), la alineación por 5 puntos a 112 × 112 y el embedding. También
-  calcula la pose de la cabeza en `pose.rs`. La prueba de vida pide girar la cabeza en las
-  direcciones que muestra la pantalla (`LIVENESS_SCHEDULE` en `FaceMatch.tsx`). Su licencia es
-  compatible con la de este proyecto, siempre que se conserve la atribución.
-- **Los modelos no vienen en el repo.** [su script de descarga](https://github.com/zkpassport/mobile-app/blob/main/scripts/download-facematch-models.sh) los baja de
-  `cdn.zkpassport.id`: `scrfd_2.5g_bnkps.ort` y `arcface.ort`. SCRFD 2.5G es un detector de
-  InsightFace, cuyos modelos son sólo para investigación no comercial. El origen de
-  `arcface.ort` no está declarado; por el nombre y el formato es probable que también sea de
-  InsightFace (sin verificar). Usarlos aquí obligaría a bajarlos aparte con esa restricción,
-  igual que hace ZKPassport, y no se podrían publicar bajo Apache-2.0.
-- **La garantía para el verificador la da la atestación**, no la comparación:
+  module is Rust with [`ort`](https://crates.io/crates/ort) (ONNX Runtime) and does detection
+  (640 × 640 input), 5-point alignment to 112 × 112, and the embedding. It also computes the
+  head pose in `pose.rs`. The liveness check asks the user to turn the head in the directions
+  the screen shows (`LIVENESS_SCHEDULE` in `FaceMatch.tsx`). Its license is compatible with
+  this project's, as long as attribution is kept.
+- **The models are not in the repo.** [Its download script](https://github.com/zkpassport/mobile-app/blob/main/scripts/download-facematch-models.sh)
+  fetches them from `cdn.zkpassport.id`: `scrfd_2.5g_bnkps.ort` and `arcface.ort`. SCRFD 2.5G
+  is an InsightFace detector, whose models are for non-commercial research only. The origin
+  of `arcface.ort` is not stated; by its name and format it is probably also InsightFace's
+  (unverified). Using them here would mean downloading them separately under that
+  restriction, as ZKPassport does, and they could not be published under Apache-2.0.
+- **The verifier's guarantee comes from attestation**, not from the match:
   [`modules/app-attest-module`](https://github.com/zkpassport/mobile-app/tree/main/modules/app-attest-module)
-  usa Play Integrity en Android y App Attest en iOS. Sin eso, reusar su código deja a este
-  proyecto en la opción B.
+  uses Play Integrity on Android and App Attest on iOS. Without it, reusing their code leaves
+  this project at option B.
 
-Así que E es una forma de hacer B, no una opción aparte: su código con YuNet y SFace en vez de
-los modelos de InsightFace. Hay que revisar si el preprocesamiento coincide, porque SFace
-también usa caras alineadas de 112 × 112, pero puede normalizar distinto (sin verificar).
+So E is a way of doing B, not a separate option: their code with YuNet and SFace instead of
+the InsightFace models. Whether the preprocessing matches needs checking, because SFace also
+uses 112 × 112 aligned faces, but may normalize differently (unverified).
 
-## Modelos abiertos revisados (2026-10-29)
+## Open models reviewed (2026-10-29)
 
-Las licencias se leyeron en la página del modelo; no se revisaron los términos de los datos
-de entrenamiento.
+Licenses were read on each model's page; the training data's terms were not reviewed.
 
-| Modelo | Para qué | Licencia de los pesos | Nota |
+| Model | Purpose | Weights license | Note |
 | --- | --- | --- | --- |
-| [YuNet](https://huggingface.co/opencv/face_detection_yunet) (OpenCV Zoo) | Detectar la cara | MIT | — |
-| [SFace](https://huggingface.co/opencv/face_recognition_sface) (OpenCV Zoo) | Reconocimiento, una variante de MobileFaceNet | Apache-2.0 | Su README da 0,9940 en su evaluación, sin decir la métrica |
-| [AuraFace v1](https://huggingface.co/fal/AuraFace-v1) | Reconocimiento, ResNet100 tipo ArcFace | Apache-2.0 | LFW 0,9965. Pesado para un teléfono; tamaño no publicado |
-| [InsightFace](https://pypi.org/project/insightface/) (`buffalo_l`) | Detección y reconocimiento | **Sólo investigación no comercial** | Se descarta: no se puede publicar con el proyecto |
+| [YuNet](https://huggingface.co/opencv/face_detection_yunet) (OpenCV Zoo) | Face detection | MIT | — |
+| [SFace](https://huggingface.co/opencv/face_recognition_sface) (OpenCV Zoo) | Recognition, a MobileFaceNet variant | Apache-2.0 | Its README gives 0.9940 on its evaluation, without naming the metric |
+| [AuraFace v1](https://huggingface.co/fal/AuraFace-v1) | Recognition, ArcFace-style ResNet100 | Apache-2.0 | LFW 0.9965. Heavy for a phone; size not published |
+| [InsightFace](https://pypi.org/project/insightface/) (`buffalo_l`) | Detection and recognition | **Non-commercial research only** | Rejected: it cannot be published with the project |
 
-## Ley 21.719
+## Chilean Law 21.719
 
-Los rasgos faciales que "permitan o confirmen la identificación única" de una persona son
-datos biométricos (Art. 16 ter), y los datos biométricos son datos sensibles (Art. 2 letra g).
-Para tratarlos, el responsable debe informar el sistema biométrico, la finalidad, el período
-de uso y cómo ejercer los derechos (Art. 16 ter).
+Facial features that "permitan o confirmen la identificación única" (allow or confirm the
+unique identification) of a person are biometric data (Art. 16 ter), and biometric data are
+sensitive data (Art. 2 letter g). To process them, the controller must disclose the
+biometric system, the purpose, the period of use, and how to exercise one's rights
+(Art. 16 ter).
 
-En B y C la comparación ocurre en el teléfono y nada sale de él. Si eso deja al proyecto sin
-un "responsable" del tratamiento, o lo cubre la excepción de actividades personales
-(Art. 1), es una interpretación **sin verificar**. En cualquier caso, la app tendría que
-mostrar esa información antes de usar la cámara.
+In B and C the match happens on the phone and nothing leaves it. Whether that leaves the
+project without a data "controller", or falls under the personal activities exception
+(Art. 1), is an **unverified** interpretation. Either way, the app would have to show that
+information before using the camera.
 
-Fuente: texto oficial de la Ley 21.719, en las fuentes de la skill `compliance-cl`.
+Source: official text of Law 21.719, in the sources of the `compliance-cl` skill.
 
-## Lo implementado
+## What was implemented
 
-Verificado el 2026-10-29.
+Verified on 2026-10-29.
 
-- **Núcleo:** [`prover/facematch`](../../prover/facematch/src/lib.rs), en Rust con
-  [`tract`](https://crates.io/crates/tract-onnx), que corre ONNX sin binarios nativos. Hace
-  la detección con YuNet, la alineación por 5 puntos, el embedding con SFace y la pose.
-  Decodifica la foto del chip en JPEG o JPEG 2000 con `jpeg2k` (port en Rust de OpenJPEG).
-  Los modelos los baja [`download-face-models.sh`](../../prover/scripts/download-face-models.sh),
-  fijados por revisión y sha256, junto con sus licencias.
-- **En la app:**
-  - comprueba que DG2 coincida con su hash en el SOD;
-  - muestra el aviso del Art. 16 ter antes de pedir la cámara;
-  - compara cada cuadro de la cámara frontal en
+- **Core:** [`prover/facematch`](../../prover/facematch/src/lib.rs), in Rust with
+  [`tract`](https://crates.io/crates/tract-onnx), which runs ONNX without native binaries. It
+  does detection with YuNet, 5-point alignment, the SFace embedding, and the pose. It decodes
+  the chip photo from JPEG or JPEG 2000 with `jpeg2k` (a Rust port of OpenJPEG). The models
+  are downloaded by [`download-face-models.sh`](../../prover/scripts/download-face-models.sh),
+  pinned by revision and sha256, along with their licenses.
+- **In the app:**
+  - it checks that DG2 matches its hash in the SOD;
+  - it shows the Art. 16 ter notice before asking for the camera;
+  - it compares every front-camera frame in
     [`FaceCheck.kt`](../../android/app/src/main/kotlin/cl/zkage/app/FaceCheck.kt);
-  - no deja generar la prueba hasta que la cara coincide.
+  - it does not let the proof be made until the face matches.
 
-  Una cédula sin foto válida en DG2 no sigue (cambiado el 2026-10-29: antes generaba la
-  prueba sin comparar la cara; ver `Gate.kt`). Nada de esto entra en la prueba.
-- **Prueba de vida:** mirar de frente, girar la cabeza a la derecha, después a la izquierda, y
-  volver a mirar de frente. El orden es fijo desde el 2026-10-30: el usuario lo probó en el
-  S25 y la pantalla mostraba una secuencia que la app no exigía. Girar al lado equivocado no
-  cuenta. Los cuadros de frente exigen la similitud completa (0,363); los girados, 0,15. Si la
-  cara se pierde por más de 10 cuadros, los giros se reinician. Detiene una foto; no detiene
-  un video ni una máscara. Al terminar, la pantalla muestra "¡Bien!" con los cuatro pasos marcados
-  durante 0,9 s y después "Comprobando que eres tú…" durante 2 s antes de generar la prueba:
-  es sólo para que la persona vea el resultado, no agrega ninguna comprobación.
+  An ID card without a valid photo in DG2 does not continue (changed on 2026-10-29: it used
+  to make the proof without matching the face; see `Gate.kt`). None of this enters the
+  proof.
+- **Liveness check:** look straight ahead, turn the head to the right, then to the left, and
+  look straight ahead again. The order is fixed since 2026-10-30: the user tried it on the
+  S25 and the screen showed a sequence the app did not enforce. Turning to the wrong side
+  does not count. Frontal frames require the full similarity (0.363); turned ones, 0.15. If
+  the face is lost for more than 10 frames, the turns restart. It stops a photo; it does not
+  stop a video or a mask. At the end, the screen shows "¡Bien!" ("Good!") with all four steps
+  checked for 0.9 s, then "Comprobando que eres tú…" ("Checking it is you…") for 2 s before
+  making the proof: it is only so the person sees the result, and adds no check.
 
-Diferencias con ZKPassport, cada una por algo medido en el S25:
+Differences from ZKPassport, each one because of something measured on the S25:
 
-| ZKPassport | Aquí | Por qué |
+| ZKPassport | Here | Why |
 | --- | --- | --- |
-| Arriba, abajo, izquierda y derecha | Sólo izquierda y derecha | Mirando hacia arriba, la similitud con la foto frontal bajó a 0,18–0,28 y la prueba casi nunca terminaba. Arriba y abajo no agregan nada contra una foto |
-| Giro medido desde cero | Desde la pose de frente de cada persona | Una cara de frente no tiene pitch cero (−0,18 en los retratos de prueba) |
-| Umbral de giro de 0,23 | 0,15 de yaw | Con los puntos de YuNet, un giro claro llegó a 0,17–0,26 |
-| Pitch dividido por la distancia entre los ojos | Dividido por la altura de ojos a boca | Al girar, la distancia entre los ojos se achica y un giro se leía como levantar la cabeza |
+| Up, down, left and right | Only left and right | Looking up, the similarity to the frontal photo dropped to 0.18–0.28 and the check almost never finished. Up and down add nothing against a photo |
+| Turn measured from zero | From each person's own frontal pose | A frontal face does not have zero pitch (−0.18 on the test portraits) |
+| Turn threshold of 0.23 | 0.15 of yaw | With YuNet's landmarks, a clear turn reached 0.17–0.26 |
+| Pitch divided by the distance between the eyes | Divided by the eyes-to-mouth height | When turning, the distance between the eyes shrinks and a turn read as lifting the head |
 
-Medido en el S25:
+Measured on the S25:
 
-| Qué | Resultado |
+| What | Result |
 | --- | --- |
-| Tiempo por cuadro de 640 × 480 (detección y embedding) | Mediana de 65 a 96 ms en cinco sesiones (75, 95, 67, 96 y 65 ms) |
-| Prueba de vida completa con la cédula real | 65 cuadros |
-| Sesiones registradas antes del ajuste, reproducidas con la lógica final | Las cuatro se completan, entre los cuadros 57 y 138 |
+| Time per 640 × 480 frame (detection and embedding) | Median of 65 to 96 ms over five sessions (75, 95, 67, 96 and 65 ms) |
+| Full liveness check with the real ID card | 65 frames |
+| Sessions recorded before the tuning, replayed with the final logic | All four complete, between frames 57 and 138 |
 
-En el Mac, con los retratos de dominio público: 0,688 entre dos fotos de la misma persona,
-0,590 y 0,658 con una de ellas reducida al tamaño de una foto de chip (en gris y en JPEG
-2000), y 0,10 y 0,15 entre personas distintas.
+On the Mac, with the public-domain portraits: 0.688 between two photos of the same person,
+0.590 and 0.658 with one of them reduced to the size of a chip photo (in grayscale and in JPEG
+2000), and 0.10 and 0.15 between different people.
 
-**Costo:** la APK de debug pasó de 137 a 200 MB. SFace pesa 38,7 MB y la librería creció
-16,7 MB por `tract` y el decodificador.
+**Cost:** the debug APK went from 137 to 200 MB. SFace is 38.7 MB and the library grew
+16.7 MB because of `tract` and the decoder.
 
-**Sin medir:** la tasa de falsos rechazos y de falsos aceptados. Se probó con una persona y
-tres retratos públicos.
+**Not measured:** the false rejection and false acceptance rates. It was tested with one
+person and three public portraits.
 
-## Recomendación
+## Recommendation
 
-**D por ahora, y B si se quiere mostrar en la demo**, nunca como garantía para el
-verificador.
+**D for now, and B if it is to be shown in the demo**, never as a guarantee for the verifier.
 
-- A queda descartada: no agrega seguridad y su costo no cabe en un teléfono.
-- C le da garantía al verificador, pero a cambio de lo que hace distinto al proyecto: código
-  abierto que cualquiera puede compilar, y post-cuántico en lo que depende de él.
-- B sirve para el portfolio, con detección y reconocimiento en el teléfono, siempre que la
-  app y el README digan que es una ayuda local, no una prueba. Conviene hacerla partiendo del
-  módulo Rust de ZKPassport (E), con modelos de licencia permisiva.
+- A is rejected: it adds no security and its cost does not fit on a phone.
+- C gives the verifier a guarantee, but at the price of what makes the project different:
+  open code anyone can build, and post-quantum in what depends on it.
+- B works for the portfolio, with detection and recognition on the phone, as long as the app
+  and the README say it is a local aid, not a proof. It is best done starting from
+  ZKPassport's Rust module (E), with permissively licensed models.
 
-Decisión (2026-10-29): B, partiendo del código de ZKPassport (E), con YuNet y SFace. Lo que
-se pedía antes de implementarla:
+Decision (2026-10-29): B, starting from ZKPassport's code (E), with YuNet and SFace. What was
+required before implementing it:
 
-1. Confirmar que la cédula real trae DG2: sí, en JPEG 2000.
-2. Medir el peso que agregan a la APK el modelo y el decodificador de JPEG 2000: 63 MB, de 137
-   a 200 MB.
-3. Usar sólo fotos con licencia en los tests, nunca la foto de la cédula real: los tests usan
-   retratos de dominio público
-   ([`tests/faces`](../../prover/facematch/tests/faces/README.md)).
+1. Confirm that the real ID card carries DG2: yes, in JPEG 2000.
+2. Measure how much the model and the JPEG 2000 decoder add to the APK: 63 MB, from 137 to
+   200 MB.
+3. Use only licensed photos in the tests, never the real ID card's photo: the tests use
+   public-domain portraits ([`tests/faces`](../../prover/facematch/tests/faces/README.md)).

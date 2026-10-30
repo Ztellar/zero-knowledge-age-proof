@@ -1,76 +1,75 @@
-# 0004 — Probar una vez, presentar muchas
+# 0004 — Prove once, present many times
 
-Fecha: 2026-10-25. Estado: aceptada. **Implementada en parte** (2026-10-26): registro con la
-clave ML-DSA en el journal y una presentación de muestra dentro de la app. **Falta** el
-verificador externo con desafío (etapa 5). Complementa la
+Date: 2026-10-25. Status: accepted. **Partly implemented** (2026-10-26): registration with
+the ML-DSA key in the journal, and a sample presentation inside the app. **Missing:** the
+external verifier with a challenge (stage 5). Complements
 [0003](0003-android-app-post-quantum-proof.md).
 
-## Contexto
+## Context
 
-En el S25 la prueba sucinta tarda 64,7 s y usa hasta 2,47 GB
-([mediciones](../measurements/stage-2-android.md)). Es demasiado lento y
-pesado para hacerlo cada vez que alguien pide la edad.
+On the S25 the succinct proof takes 64.7 s and uses up to 2.47 GB
+([measurements](../measurements/stage-2-android.md)). That is too slow and too heavy to do
+every time someone asks for the age.
 
-Lo que se midió y no lo baja:
+What was measured and does not bring it down:
 
-- **Verificar CSCA→DSC fuera de la prueba.** Los ciclos del programa bajan de 198.377 a
-  122.622, pero con la paginación (47.061) suman 169.683. Eso no cabe en 2^17 = 131.072,
-  así que la prueba sigue en un segmento de 2^18 y tarda lo mismo en el Mac: 23,4 s contra
-  22,8 s, en la prueba compuesta. Además revelaría el DSC.
-- **Segmentos más chicos.** Con 2^16 baja a 1,75 GB pero tarda 21 minutos
-  ([etapa 1](../measurements/stage-1-desktop.md)).
+- **Verifying CSCA→DSC outside the proof.** The program's cycles drop from 198,377 to
+  122,622, but with paging (47,061) they add up to 169,683. That does not fit in
+  2^17 = 131,072, so the proof stays in a 2^18 segment and takes the same on the Mac: 23.4 s
+  against 22.8 s, for the composite proof. It would also reveal the DSC.
+- **Smaller segments.** With 2^16 it drops to 1.75 GB but takes 21 minutes
+  ([stage 1](../measurements/stage-1-desktop.md)).
 
-Las dos firmas RSA-4096 ocupan 152.031 de los 198.377 ciclos del programa (77%). Ese es el
-piso de RISC Zero con este circuito.
+The two RSA-4096 signatures take 152,031 of the program's 198,377 cycles (77%). That is
+RISC Zero's floor with this circuit.
 
-## Decisión
+## Decision
 
-La prueba pesada se genera **una vez**, al registrar la cédula. Cada uso posterior cuesta
-sólo una firma.
+The heavy proof is made **once**, when the ID card is registered. Every later use costs
+only a signature.
 
-1. **Registro.** La app genera un par de claves ML-DSA (FIPS 204) del teléfono. La prueba
-   STARK recibe la clave pública como entrada y la publica en el journal junto al `Claim`.
-   Corre en segundo plano con una notificación de progreso.
-2. **Presentación.** El verificador manda un desafío aleatorio. El teléfono responde con la
-   prueba guardada y una firma ML-DSA del desafío.
-3. **Verificación.** El verificador comprueba la prueba, que la CSCA del journal sea de
-   Chile, que la fecha del journal sea reciente y que la firma del desafío corresponda a la
-   clave del journal.
+1. **Registration.** The app generates an ML-DSA (FIPS 204) key pair for the phone. The
+   STARK proof takes the public key as input and publishes it in the journal next to the
+   `Claim`. It runs in the background with a progress notification.
+2. **Presentation.** The verifier sends a random challenge. The phone answers with the stored
+   proof and an ML-DSA signature of the challenge.
+3. **Verification.** The verifier checks the proof, that the journal's CSCA is Chile's, that
+   the journal's date is recent, and that the challenge's signature matches the journal's
+   key.
 
-Sigue siendo post-cuántico en lo que controla el proyecto: STARK más ML-DSA.
+It stays post-quantum in what the project controls: STARK plus ML-DSA.
 
-## Costo aceptado
+## Accepted cost
 
-**Presentaciones enlazables entre verificadores.** Todos reciben la misma prueba y la misma
-clave pública. Si dos verificadores juntan sus datos, saben que fue la misma persona, aunque
-no sepan quién. Se documenta como limitación de la primera versión.
+**Presentations are linkable across verifiers.** They all receive the same proof and the same
+public key. If two verifiers pool their data, they know it was the same person, even if they
+do not know who. Documented as a limitation of the first version.
 
-Formas de cerrarlo, ambas fuera de la primera versión:
+Ways to close it, both outside the first version:
 
-- una clave por verificador, lo que obliga a una prueba por verificador;
-- una prueba corta por uso que verifique la prueba guardada (composición de RISC Zero).
-  Su costo no está medido.
+- one key per verifier, which forces one proof per verifier;
+- a short per-use proof that verifies the stored proof (RISC Zero composition). Its cost has
+  not been measured.
 
-## Preguntas abiertas
+## Open questions
 
-- **Dónde vive la clave ML-DSA.** *Resuelta 2026-10-26.* El Android Keystore genera claves
-  ML-DSA desde la API 37 (`KeyProperties.KEY_ALGORITHM_ML_DSA_65`, "Added in API level 37"
-  en la referencia de Android); el S25 está en la API 36. La app
-  ([`DeviceKey`](../../android/app/src/main/kotlin/cl/zkage/app/DeviceKey.kt)) usa el
-  Keystore en API 37+ y, si no,
-  genera la clave ML-DSA-65 con Bouncy Castle desde una semilla de 32 bytes guardada cifrada
-  con AES-256-GCM del Keystore. En el S25 esa clave AES quedó en StrongBox. Costo: al firmar,
-  la clave está en la memoria de la app; la semilla cifrada no sirve en otro teléfono.
-  **Android 17** (el S25 lo recibirá): la prueba guardada y su clave en software siguen
-  sirviendo tras la actualización; la siguiente prueba usa una clave del Keystore y recién
-  cuando queda guardada se borra la de software. La app elige la clave por el hash que
-  trae la prueba, así que una prueba fallida a mitad del cambio no rompe la anterior. En el
-  emulador de Android 17 la KeyMint es `SoftKeymaster`, que no genera ML-DSA
-  (`TRANSACTION_FAILED` con `Algorithm(ML_DSA)`, `MlDsaVariant(ML_DSA_65)`): la app vuelve a
-  software y dice por qué. **La rama del Keystore sigue sin probarse en un teléfono con
-  ML-DSA**, ni la migración; se verá en el S25 con Android 17.
-  El journal publica el SHA-256 de la clave pública (SubjectPublicKeyInfo DER), no la
-  clave entera (1.974 B): la presentación la manda junto con la firma.
-- **Vigencia de la prueba.** El journal trae la fecha en que se generó. Cuánto tiempo la
-  acepta un verificador lo decide el verificador; la sugerencia es 12 meses, como la
-  revalidación de la [0002](0002-device-registry.md).
+- **Where the ML-DSA key lives.** *Resolved 2026-10-26.* The Android Keystore generates
+  ML-DSA keys from API 37 (`KeyProperties.KEY_ALGORITHM_ML_DSA_65`, "Added in API level 37"
+  in the Android reference); the S25 is on API 36. The app
+  ([`DeviceKey`](../../android/app/src/main/kotlin/cl/zkage/app/DeviceKey.kt)) uses the
+  Keystore on API 37+ and, otherwise, generates the ML-DSA-65 key with Bouncy Castle from a
+  32-byte seed stored encrypted with a Keystore AES-256-GCM key. On the S25 that AES key
+  ended up in StrongBox. Cost: while signing, the key is in the app's memory; the encrypted
+  seed is useless on another phone. **Android 17** (the S25 will get it): the stored proof
+  and its software key keep working after the update; the next proof uses a Keystore key,
+  and only once it is stored is the software one deleted. The app picks the key by the hash
+  the proof carries, so a proof that fails halfway through the switch does not break the
+  previous one. On the Android 17 emulator the KeyMint is `SoftKeymaster`, which does not
+  generate ML-DSA (`TRANSACTION_FAILED` with `Algorithm(ML_DSA)`, `MlDsaVariant(ML_DSA_65)`):
+  the app falls back to software and says why. **The Keystore branch is still untested on a
+  phone with ML-DSA**, and so is the migration; it will be seen on the S25 with Android 17.
+  The journal publishes the SHA-256 of the public key (DER SubjectPublicKeyInfo), not the
+  whole key (1,974 bytes): the presentation sends it along with the signature.
+- **How long the proof is valid.** The journal carries the date it was made. How long a
+  verifier accepts it is the verifier's call; the suggestion is 12 months, like the
+  revalidation in [0002](0002-device-registry.md).

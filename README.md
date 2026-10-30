@@ -1,108 +1,117 @@
-# Prueba de edad
+# Age proof
 
-[![Android: funciona](https://img.shields.io/badge/Android-funciona-1F7A4D?logo=android&logoColor=white)](#en-qué-estado-está)
-[![iOS: no disponible](https://img.shields.io/badge/iOS-no%20disponible-8C9BBA?logo=apple&logoColor=white)](#en-qué-estado-está)
-[![SDK para empresas: propuesta](https://img.shields.io/badge/SDK%20para%20empresas-propuesta-8C9BBA)](#un-sdk-para-empresas-propuesta)
-[![Prueba: STARK post-cuántica](https://img.shields.io/badge/prueba-STARK%20post--cu%C3%A1ntica-1846C4)](docs/technical.md#qué-es-post-cuántico-y-qué-no)
-[![Licencia: Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-1846C4)](LICENSE)
+[![Android: working](https://img.shields.io/badge/Android-working-1F7A4D?logo=android&logoColor=white)](#status)
+[![iOS: not available](https://img.shields.io/badge/iOS-not%20available-8C9BBA?logo=apple&logoColor=white)](#status)
+[![npm package: not published](https://img.shields.io/badge/npm%20package-not%20published-8C9BBA?logo=npm&logoColor=white)](#for-businesses-an-npm-package)
+[![Proof: post-quantum STARK](https://img.shields.io/badge/proof-post--quantum%20STARK-1846C4)](docs/technical.md#what-is-post-quantum-and-what-is-not)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-1846C4)](LICENSE)
 
-**Demuestra que eres mayor de edad sin mostrar tu cédula.**
+**Prove you are an adult without showing your ID card.**
 
-Hoy, para probar que tienes 18 años, entregas tu cédula y quien la mira ve tu nombre, tu
-RUN, tu fecha de nacimiento y tu foto. Esta app hace lo contrario: lee el chip de tu
-cédula chilena con el teléfono y genera una prueba matemática de que eres mayor de 18. Quien
-la recibe sólo sabe eso. No ve tu nombre, tu RUN, tu fecha de nacimiento ni tu foto.
+Today, to prove you are 18, you hand over your ID card, and whoever looks at it sees your
+name, your national ID number, your date of birth and your photo. This app does the
+opposite: it reads the chip of your Chilean ID card with your phone and makes a mathematical
+proof that you are over 18. Whoever receives it learns only that. They do not see your name,
+your ID number, your date of birth or your photo.
 
-## Cómo se usa
+## How it is used
 
-La primera vez, en tres pasos y unos minutos:
+The first time, in three steps and a few minutes:
 
-1. **Lees tu cédula con el teléfono.** Muestras el reverso a la cámara (o escribes tres
-   datos) y apoyas la cédula en el teléfono para leer su chip.
-2. **Confirmas que eres tú.** La app compara tu cara con la foto del chip, con una prueba de
-   vida. Todo ocurre en el teléfono.
-3. **El teléfono genera tu prueba.** Tarda entre uno y tres minutos y puedes salir de la app
-   mientras tanto.
+1. **You read your ID card with the phone.** You show the back of the card to the camera (or
+   type three fields) and hold the card against the phone to read its chip.
+2. **You confirm it is you.** The app compares your face with the chip's photo, with a
+   liveness check. Everything happens on the phone.
+3. **The phone makes your proof.** It takes one to three minutes, and you can leave the app
+   meanwhile.
 
-Después, cada vez que te pidan la edad, tocas **Mostrar mi prueba** y escaneas el código QR
-que te muestran. El sitio recibe sólo un "sí, es mayor de 18".
+After that, whenever you are asked for your age, you tap **Mostrar mi prueba** ("Show my
+proof") and scan the QR code you are shown. The site receives only a "yes, over 18".
 
-Nada de tu cédula sale del teléfono: ni los datos, ni la foto, ni las imágenes de la cámara.
+Nothing from your ID card leaves the phone: not the data, not the photo, not the camera
+images.
 
-## Dónde se aplicaría
+The app's interface is in Spanish, for people in Chile.
 
-En cualquier lugar donde hoy se pide la cédula sólo para ver la edad:
+## Where it would apply
 
-- **Comercio en línea** de productos con restricción de edad, como alcohol o tabaco.
-- **Entradas a eventos y locales**: en la puerta, la persona escanea el QR del verificador en
-  vez de entregar la cédula.
-- **Sitios y apps con contenido para adultos**, sin pedir una copia de la cédula ni guardar
-  datos personales.
-- **Cualquier servicio que deba comprobar la edad** y prefiera no recibir datos que después
-  tiene que proteger.
+Anywhere the ID card is asked for today only to check age:
 
-Para quien verifica, la ventaja es no guardar datos personales que proteger. La prueba dice
-también que el documento lo firmó el Registro Civil, que está vigente y que el chip original
-estaba junto al teléfono.
+- **Online shops** selling age-restricted products, such as alcohol or tobacco.
+- **Event and venue entrances**: at the door, the person scans the verifier's QR code instead
+  of handing over the ID card.
+- **Adult content sites and apps**, without asking for a copy of the ID card or storing
+  personal data.
+- **Any service that must check age** and would rather not receive data it then has to
+  protect.
 
-## Qué usa
+For the verifier, the advantage is not storing personal data to protect. The proof also
+says that the Civil Registry signed the document, that it is valid, and that the original
+chip was next to the phone.
 
-| Pieza | Qué hace | Con qué |
+## What it uses
+
+| Piece | What it does | With |
 | --- | --- | --- |
-| Chip de la cédula | Trae los datos firmados por el Registro Civil | NFC, estándar ICAO 9303, [JMRTD](https://jmrtd.org) |
-| Lectura del reverso | Llena los datos de acceso al chip sin escribirlos | ML Kit de Google, en el teléfono |
-| Comparación de cara | Comprueba que quien usa la app es la persona de la foto | YuNet y SFace (OpenCV Zoo), en el teléfono |
-| Prueba de conocimiento cero | Demuestra "mayor de 18" sin revelar nada más | STARK de [RISC Zero](https://github.com/risc0/risc0), que sólo usa funciones hash |
-| Firma del teléfono | Liga la prueba a tu teléfono y a cada sitio | ML-DSA-65 (FIPS 204) |
+| ID card chip | Holds the data signed by the Civil Registry | NFC, ICAO 9303 standard, [JMRTD](https://jmrtd.org) |
+| Back-of-card reading | Fills in the chip's access data without typing it | Google ML Kit, on the phone |
+| Face match | Checks that the person using the app is the one in the photo | YuNet and SFace (OpenCV Zoo), on the phone |
+| Zero-knowledge proof | Shows "over 18" without revealing anything else | [RISC Zero](https://github.com/risc0/risc0) STARK, which only uses hash functions |
+| Phone signature | Binds the proof to your phone and to each site | ML-DSA-65 (FIPS 204) |
 
-**Por qué post-cuántica:** la prueba y la firma del teléfono resisten un computador
-cuántico. Otros proyectos parecidos, como [ZKPassport](https://github.com/zkpassport) o la
-[librería experimental de la Comisión Europea](https://github.com/eu-digital-identity-wallet/av-lib-android-zkp-age-icao),
-usan criptografía de curvas elípticas, que no la resiste. Hay un límite: las firmas del Registro Civil son RSA y las elige el Estado
-([detalle](docs/technical.md#qué-es-post-cuántico-y-qué-no)).
+**Why post-quantum:** the proof and the phone's signature resist a quantum computer. Similar
+projects, such as [ZKPassport](https://github.com/zkpassport) or the
+[European Commission's experimental library](https://github.com/eu-digital-identity-wallet/av-lib-android-zkp-age-icao),
+use elliptic-curve cryptography, which does not. There is a limit: the Civil Registry's
+signatures are RSA, and the state chooses them
+([details](docs/technical.md#what-is-post-quantum-and-what-is-not)).
 
-## En qué estado está
+## Status
 
-| Parte | Estado |
+| Part | Status |
 | --- | --- |
-| App Android | **Funciona.** Probada con una cédula real en un Galaxy S25: leyó el chip, comparó la cara, generó la prueba en 92,5 s y el verificador la aceptó. Sólo se ha probado en ese teléfono |
-| Interfaz accesible (modo oscuro, letra hasta 200%, etiquetas para lector de pantalla) | Implementada el 2026-10-29. Recorrida en el S25 con la cédula real hasta generar la prueba (2026-10-30). Falta probar la lectura del reverso con una cédula real, presentar la prueba nueva y usarla con TalkBack |
-| Verificador web | **De referencia.** Funciona en una red local, para demostraciones |
-| iOS | **No disponible.** No hay código para iPhone |
-| SDK para empresas | **Propuesta, no implementada** ([abajo](#un-sdk-para-empresas-propuesta)) |
-| Play Store | No publicada |
-| Auditoría de seguridad | No hecha |
+| Android app | **Works.** Tested with a real ID card on a Galaxy S25: it read the chip, matched the face, made the proof in 92.5 s and the verifier accepted it. Tested only on that phone |
+| Accessible interface (dark mode, text up to 200%, screen reader labels) | Implemented on 2026-10-29. Walked through on the S25 with the real ID card up to making the proof (2026-10-30). Still to test: reading the back of a real ID card, presenting the new proof, and using it with TalkBack |
+| Web verifier | **Reference only.** Works on a local network, for demos |
+| iOS | **Not available.** There is no iPhone code |
+| npm package for businesses | **Built, not published.** It speaks protocol version 2, which the app does not speak yet ([below](#for-businesses-an-npm-package)) |
+| Play Store | Not published |
+| Security audit | Not done |
 
-Es un proyecto open source y educativo, no un producto
-([decisión 0003](docs/decisions/0003-android-app-post-quantum-proof.md)). Si puede pasar a uso
-real está en discusión en la [decisión 0008](docs/decisions/0008-real-use-and-whether-to-continue.md).
+It is an open-source, educational project, not a product
+([decision 0003](docs/decisions/0003-android-app-post-quantum-proof.md)). The chosen direction
+is to make the post-quantum piece reusable by others
+([decision 0008](docs/decisions/0008-real-use-and-whether-to-continue.md)).
 
-## Un SDK para empresas (propuesta)
+## For businesses: an npm package
 
-> **No implementado.** Lo que sigue es una propuesta. Hoy existen el verificador web de
-> referencia ([`prover/verifier-web`](prover/verifier-web)) y la librería en Rust que verifica
-> presentaciones ([`prover/verifier`](prover/verifier)).
+> **Not published to npm yet, and the app does not speak its protocol yet**
+> ([decision 0010](docs/decisions/0010-verifier-package-npm.md)). It can be built from this
+> repository and tried against the test vectors.
 
-La idea es que un comercio no tenga que entender la criptografía para aceptar la prueba.
-Bastarían dos piezas:
+[`zkage-verifier`](packages/verifier) lets a business accept the proof from its own web
+server, without understanding the cryptography or running anything extra:
 
-1. **Un componente para su página o app** que muestra el QR y espera la respuesta del
-   teléfono, como hace hoy el verificador web.
-2. **Una librería para su servidor** que comprueba la prueba y devuelve sólo "mayor de 18: sí
-   o no", para los lenguajes más usados.
+1. **`npm install`** a package that carries the project's verifier compiled to WebAssembly.
+2. **Two calls in the server it already has:** one creates the challenge and the QR code for
+   its page, the other checks what the phone sends and answers only "over 18: yes or no".
 
-Cada verificador podría diseñar su propia pantalla. Lo que no cambia es la pantalla de la
-app que pregunta "¿Mostrar tu prueba a este sitio?". Ahí la persona ve qué sitio pide la
-prueba y qué va a saber.
+Checking a presentation takes about 57 ms in Node on a Mac. The wire format is specified in
+[`docs/protocol.md`](docs/protocol.md), so anyone can also build their own verifier.
 
-## Para desarrolladores
+Each business designs its own page. What does not change is the app screen that asks
+"¿Mostrar tu prueba a este sitio?" ("Show your proof to this site?"). There the person sees
+which site is asking and what it will learn.
 
-Cómo funciona por dentro, lo medido, los límites conocidos y cómo compilar y probar están en
-la [documentación técnica](docs/technical.md). Las decisiones están en
-[`docs/decisions/`](docs/decisions) y las mediciones en [`docs/measurements/`](docs/measurements).
+## For developers
 
-## Licencia
+How it works inside, what was measured, the known limits, and how to build and test are in
+the [technical documentation](docs/technical.md). The wire format is in
+[`docs/protocol.md`](docs/protocol.md), the decisions in [`docs/decisions/`](docs/decisions)
+and the measurements in [`docs/measurements/`](docs/measurements).
 
-[Apache-2.0](LICENSE). Las dependencias tienen su propia licencia: JMRTD y SCUBA son LGPL,
-YuNet es MIT y SFace Apache-2.0. La letra Atkinson Hyperlegible Next es SIL OFL 1.1; su
-licencia va en [`android/app/src/main/assets/licenses`](android/app/src/main/assets/licenses).
+## License
+
+[Apache-2.0](LICENSE). Dependencies have their own licenses: JMRTD and SCUBA are LGPL, YuNet
+is MIT and SFace Apache-2.0. The Atkinson Hyperlegible Next font is SIL OFL 1.1; its license
+is in [`android/app/src/main/assets/licenses`](android/app/src/main/assets/licenses).

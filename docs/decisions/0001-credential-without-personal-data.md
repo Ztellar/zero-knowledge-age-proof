@@ -1,47 +1,46 @@
-# 0001 — Credencial sin datos personales, atada a un teléfono
+# 0001 — A credential without personal data, bound to a phone
 
-Fecha: 2026-10-22. Estado: en pausa desde la [decisión 0003](0003-android-app-post-quantum-proof.md). **No implementada.**
+Date: 2026-10-22. Status: on hold since [decision 0003](0003-android-app-post-quantum-proof.md). **Not implemented.**
 
-## Decisión
+## Decision
 
-Tras leer el carnet, el teléfono guarda sólo una prueba de "mayor de 18 en la fecha D"
-atada a una clave no extraíble del chip de seguridad del teléfono. No guarda nombre, RUT,
-fecha de nacimiento ni foto, y ningún servidor los recibe. Cada uso genera una prueba nueva
-que el sitio no puede vincular con otros usos. Un mismo carnet sólo tiene un teléfono activo
-y la credencial se revalida periódicamente.
+After reading the ID card, the phone stores only a proof of "over 18 on date D", bound to a
+non-extractable key in the phone's secure chip. It does not store the name, national ID
+number (RUT), date of birth or photo, and no server receives them. Each use makes a new
+proof that the site cannot link to other uses. An ID card has only one active phone, and the
+credential is revalidated periodically.
 
-## Enmienda (2026-10-22): comparación de cara
+## Amendment (2026-10-22): face match
 
-Al registrarse, el teléfono lee también la foto del chip y la compara con la cara de la
-persona frente a la cámara. Las dos imágenes se descartan al terminar y nunca salen del
-teléfono. Motivo: ZKPassport lo hace y, sin esto, cualquiera puede registrar un carnet
-prestado.
+At registration, the phone also reads the chip's photo and compares it with the face of the
+person in front of the camera. Both images are discarded at the end and never leave the
+phone. Reason: ZKPassport does it and, without it, anyone can register a borrowed ID card.
 
-Es un dato biométrico (art. 16 ter de la Ley 21.719). Exige consentimiento expreso (art. 16)
-e informar antes cuatro cosas: qué sistema biométrico se usa, para qué, durante cuánto
-tiempo y cómo ejercer los derechos. Eso es una pantalla de consentimiento antes de la
-cámara. Si el tratamiento dentro del teléfono nos hace responsables sigue sin resolverse
-(ver decisión 0002); se aplica la regla igual, por prudencia.
+It is biometric data (art. 16 ter of Chilean Law 21.719). It requires express consent
+(art. 16) and informing four things beforehand: which biometric system is used, what for,
+for how long, and how to exercise one's rights. That means a consent screen before the
+camera. Whether processing inside the phone makes us data controllers remains unresolved
+(see decision 0002); the rule is applied anyway, out of caution.
 
-## Por qué
+## Why
 
-- El requisito es que ningún dato personal llegue a terceros, incluidos proveedores
-  extranjeros: el diseño lo impide por construcción, no por política.
-- Una flag sola (`mayor_de_18 = true`) se falsifica modificando la app; con su prueba
-  y la clave del teléfono, no.
-- La edad sólo aumenta: "mayor de 18 en la fecha D" sigue siendo cierto después, así que la
-  prueba no vence por edad, sólo por la revalidación o el vencimiento del carnet.
+- The requirement is that no personal data reaches third parties, including foreign
+  providers: the design prevents it by construction, not by policy.
+- A bare flag (`mayor_de_18 = true`) can be forged by modifying the app; with its proof and
+  the phone's key, it cannot.
+- Age only goes up: "over 18 on date D" stays true afterwards, so the proof does not expire
+  because of age, only through revalidation or the ID card's expiry.
 
-## Descartado
+## Rejected
 
-- **Consultar al Registro Civil en línea:** exige un convenio, el Estado vería cada sitio
-  visitado y depende de que su sistema esté arriba. La firma del chip ya prueba el dato.
-- **Guardar los datos del carnet cifrados en el teléfono:** sigue habiendo datos personales
-  almacenados.
-- **Cero almacenamiento (apoyar el carnet en cada uso):** demasiada fricción.
+- **Querying the Civil Registry online:** it requires an agreement, the state would see
+  every site visited, and it depends on their system being up. The chip's signature already
+  proves the data.
+- **Storing the ID card data encrypted on the phone:** there is still stored personal data.
+- **Zero storage (tapping the ID card on every use):** too much friction.
 
-## Costo aceptado
+## Accepted cost
 
-"Un carnet, un teléfono" necesita un registro compartido de identificadores de documento.
-No contiene datos personales, pero deja de ser un sistema sin ningún componente central.
-Dónde vive ese registro se decidió en [la decisión 0002](0002-device-registry.md).
+"One ID card, one phone" needs a shared registry of document identifiers. It holds no
+personal data, but the system stops having no central component at all. Where that registry
+lives was settled in [decision 0002](0002-device-registry.md).

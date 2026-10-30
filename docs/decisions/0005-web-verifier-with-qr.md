@@ -1,64 +1,67 @@
-# 0005 — Verificador web con QR
+# 0005 — Web verifier with a QR code
 
-Fecha: 2026-10-26. Estado: aceptada. **Implementada** (2026-10-26): librería
-`prover/verifier`, servidor `prover/verifier-web` y escaneo y envío en la app. Probada con
-una cédula real en el S25: el verificador aceptó la prueba.
-Implementa la presentación de la [0004](0004-prove-once-present-many.md).
+Date: 2026-10-26. Status: accepted. **Implemented** (2026-10-26): the `prover/verifier`
+library, the `prover/verifier-web` server, and scanning and sending in the app. Tested with a
+real ID card on the S25: the verifier accepted the proof. Implements the presentation of
+[0004](0004-prove-once-present-many.md). Its protocol becomes version 1 of
+[`docs/protocol.md`](../protocol.md); [0010](0010-verifier-package-npm.md) proposes
+version 2.
 
-## Contexto
+## Context
 
-La prueba guardada pesa 223.770 B y la firma ML-DSA-65 3.309 B. Un QR versión 40 lleva
-como máximo 2.953 B en modo binario, así que la prueba no cabe en un QR: hay que mandarla
-por la red.
+The stored proof is 223,770 bytes and the ML-DSA-65 signature 3,309 bytes. A version 40 QR
+code holds at most 2,953 bytes in binary mode, so the proof does not fit in a QR code: it has
+to go over the network.
 
-Opciones que se consideraron:
+Options considered:
 
-| Opción | Por qué no |
+| Option | Why not |
 | --- | --- |
-| CLI con archivo exportado | El desafío se copia a mano; como demo convence poco. Queda como herramienta de prueba |
-| Teléfono a teléfono por NFC o Bluetooth | La más compleja, y 224 KB por NFC es lento |
+| CLI with an exported file | The challenge is copied by hand; it is not convincing as a demo. Kept as a testing tool |
+| Phone to phone over NFC or Bluetooth | The most complex, and 224 KB over NFC is slow |
 
-## Decisión
+## Decision
 
-1. El verificador es un servidor web. Su página muestra un QR con su origen y un desafío
-   aleatorio de 32 bytes.
-2. La app escanea el QR, muestra a quién le va a responder y, si la persona acepta, firma
-   el mensaje de presentación con la clave del teléfono y envía por HTTPS la prueba, la
-   clave pública y la firma a ese origen.
-3. El servidor verifica y la página muestra el resultado.
+1. The verifier is a web server. Its page shows a QR code with its origin and a random
+   32-byte challenge.
+2. The app scans the QR code, shows whom it is about to answer and, if the person agrees,
+   signs the presentation message with the phone's key and sends the proof, the public key
+   and the signature over HTTPS to that origin.
+3. The server verifies and the page shows the result.
 
-El servidor usa HTTPS con un certificado autofirmado que genera al arrancar, y el QR lleva
-su SHA-256: la app confía sólo en ese certificado (lo fija), no en una CA. Así no hace
-falta HTTP sin cifrar, que Android bloquea por defecto. El QR también lleva una sesión, y
-la página consulta su resultado; cada sesión dura 5 minutos y se responde una vez.
+The server uses HTTPS with a self-signed certificate it generates at startup, and the QR
+code carries its SHA-256: the app trusts only that certificate (it pins it), not a CA. That
+avoids plain HTTP, which Android blocks by default. The QR code also carries a session, and
+the page polls for its result; each session lasts 5 minutes and is answered once.
 
-El mensaje que se firma es `"zkage-presentation-v1" || 0x00 || u16 largo del origen ||
-origen || desafío`. El origen va firmado para que un sitio malicioso no pueda reenviar el
-QR de otro sitio y usar la respuesta (ataque de relevo): el servidor rechaza firmas hechas
-para otro origen.
+The signed message is `"zkage-presentation-v1" || 0x00 || u16 origin length || origin ||
+challenge`. The origin is signed so that a malicious site cannot forward another site's QR
+code and use the answer (relay attack): the server rejects signatures made for another
+origin.
 
-El núcleo es una librería de Rust que comprueba, en orden:
+The core is a Rust library that checks, in order:
 
-1. el recibo STARK contra el image ID del programa del proyecto;
-2. que el hash de la CSCA del journal sea de una CSCA de Chile;
-3. que la edad mínima del journal sea al menos la que pide el verificador;
-4. que la fecha del journal no sea futura ni más antigua que la vigencia del verificador
-   (12 meses por defecto, como sugiere la 0004);
-5. que el SHA-256 de la clave pública coincida con el del journal;
-6. la firma ML-DSA-65 del mensaje de presentación.
+1. the STARK receipt against the project program's image ID;
+2. that the journal's CSCA hash is one of Chile's CSCAs;
+3. that the journal's minimum age is at least the one the verifier asks for;
+4. that the journal's date is neither in the future nor older than the verifier's validity
+   window (12 months by default, as 0004 suggests);
+5. that the SHA-256 of the public key matches the journal's;
+6. the ML-DSA-65 signature of the presentation message.
 
-La usan el servidor y, para probarlo sin teléfono, el ejemplo `mock_presentation`
-(arma la parte del teléfono con la cédula de prueba).
+It is used by the server and, to test without a phone, by the `mock_presentation` example
+(which builds the phone's side with the test ID card).
 
-## Costo aceptado
+## Accepted cost
 
-- Para la demo el servidor corre en el computador. En vez de la misma red Wi-Fi, que en
-  algunas redes da IPs públicas en subredes distintas, el teléfono lo alcanza por USB con
-  `adb reverse tcp:8443 tcp:8443` y el servidor escucha sólo en `127.0.0.1`. Publicarlo en
-  internet tiene costo y queda fuera por ahora.
-- El navegador advierte que el certificado es autofirmado; la app no, porque lo fija.
-- El escáner de QR es el de Google Play Services (sin permiso de cámara): la app depende
-  de un componente que no es open source.
-- Si la app sube a `targetSdk` 37, Android 17 le exige el permiso de red local para hablar
-  con un servidor de la misma red.
-- Las presentaciones siguen siendo enlazables entre verificadores (0004).
+- For the demo the server runs on the computer. Instead of the same Wi-Fi network, which on
+  some networks hands out public IPs in different subnets, the phone reaches it over USB with
+  `adb reverse tcp:8443 tcp:8443`, and the server listens only on `127.0.0.1`. Publishing it
+  on the internet costs money and is out of scope for now.
+- The browser warns that the certificate is self-signed; the app does not, because it pins
+  it.
+- The QR scanner is Google Play Services' (no camera permission): the app depends on a
+  component that is not open source.
+- If the app moves to `targetSdk` 37, Android 17 requires the local network permission to
+  talk to a server on the same network.
+- Presentations remain linkable across verifiers (0004).

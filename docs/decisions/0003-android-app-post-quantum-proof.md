@@ -1,33 +1,34 @@
-# 0003 — App Android open source con prueba post-cuántica
+# 0003 — Open-source Android app with a post-quantum proof
 
-Fecha: 2026-10-22. Estado: aceptada. **No implementada.** Deja en pausa las decisiones
-[0001](0001-credential-without-personal-data.md) y [0002](0002-device-registry.md).
+Date: 2026-10-22. Status: accepted. **Not implemented.** Puts decisions
+[0001](0001-credential-without-personal-data.md) and [0002](0002-device-registry.md) on hold.
 
-## Decisión
+## Decision
 
-El proyecto pasa a ser un proyecto de portfolio, open source y pensado para que otros
-aprendan. La primera versión es una app Android que:
+The project becomes a portfolio project, open source and meant for others to learn from. The
+first version is an Android app that:
 
-1. lee una cédula chilena por NFC;
-2. comprueba la firma del Registro Civil contra los certificados públicos de Chile;
-3. genera en el teléfono una prueba de conocimiento cero de "mayor de 18" con un sistema de
-   pruebas post-cuántico (STARK, basado sólo en funciones hash).
+1. reads a Chilean ID card over NFC;
+2. checks the Civil Registry's signature against Chile's public certificates;
+3. makes, on the phone, a zero-knowledge proof of "over 18" with a post-quantum proof system
+   (a STARK, based only on hash functions).
 
-## Por qué
+## Why
 
-- Como negocio no compite: ZKPassport ya resuelve lo diseñado en 0001 y 0002, y en varios
-  puntos mejor (ver "Lo que ZKPassport ya resuelve" en [el plan](../plan.md)).
-- Como portfolio sí: criptografía aplicada a la cédula chilena es poco común.
-- ZKPassport usa UltraHonk, basado en curvas elípticas y no post-cuántico. Una versión con
-  STARK es una diferencia real y explicable.
+- As a business it does not compete: ZKPassport already solves what 0001 and 0002 designed,
+  and better in several respects (see "What ZKPassport already solves" in
+  [the plan](../plan.md)).
+- As a portfolio piece it does: applied cryptography on the Chilean ID card is uncommon.
+- ZKPassport uses UltraHonk, based on elliptic curves and not post-quantum. A STARK version
+  is a real and explainable difference.
 
-## Límite reconocido
+## Acknowledged limit
 
-El sistema **no puede ser post-cuántico de punta a punta**: la firma del Registro Civil es
-RSA y la elige el Estado. Un computador cuántico capaz de romper RSA podría falsificar
-cédulas. El proyecto hace post-cuántico lo que controla y documenta lo que no.
+The system **cannot be post-quantum end to end**: the Civil Registry's signature is RSA and
+the state chooses it. A quantum computer able to break RSA could forge ID cards. The project
+makes post-quantum what it controls and documents what it does not.
 
-## Fuera de la primera versión
+## Out of the first version
 
-Comparación de cara, registro de teléfonos, OPRF, cambio de teléfono y revalidación (0001
-y 0002). Se retoman si la primera versión funciona.
+Face match, phone registry, OPRF, phone change and revalidation (0001 and 0002). They come
+back if the first version works.

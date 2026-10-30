@@ -1,100 +1,101 @@
-# Tamaños de clave de las cédulas chilenas
+# Key sizes of Chilean ID cards
 
-Fecha: 2026-10-26. Para qué: que la cédula de prueba use los mismos tamaños de clave que
-las cédulas reales, y saber qué tamaños tiene que soportar el circuito.
+Date: 2026-10-26. Purpose: make the test ID card use the same key sizes as real ID cards,
+and know which sizes the circuit has to support.
 
-## Fuentes y lo que dicen
+## Sources and what they say
 
-| Fuente | Qué trae | Chile |
+| Source | What it carries | Chile |
 | --- | --- | --- |
-| Registro de ZKPassport, `certificates.json` ([URL](https://raw.githubusercontent.com/zkpassport/zkpassport-packages/HEAD/packages/registry-explorer/public/assets/certificates/certificates.json), bajado el 2026-10-22, sha256 `fc5ce6fe…f321e2`) | CSCA: módulo, exponente, vigencia | 4 CSCA RSA con SHA-256 y exponente 65537: 2013 (3072), 2016 (3072), 2021 (3072), 2024 (4096) |
-| [Reglas de soporte de ZKPassport](https://github.com/zkpassport/zkpassport-packages/blob/fac2812/packages/registry-sdk/src/document-support-rules.json) (commit `fac2812`) | Nivel de soporte por país | Cédula `id_card_support: 0` (`NOT_SUPPORTED`), pasaporte `1`. Aun así una cédula real funcionó en su app |
-| [Mapa de CSCA de Self](https://raw.githubusercontent.com/selfxyz/self/52dba2742b4c37a957eb5ab8ebee83fdccdcf187/registry/outputs/map_csca.json) (commit `52dba274`, 2024-12-01), sacado del ICAO PKD | Cantidad de CSCA por algoritmo y tamaño | 3 CSCA RSA 3072 con SHA-256 (la de 2024 todavía no aparecía) |
-| [Mapa de DSC de Self](https://raw.githubusercontent.com/selfxyz/self/52dba2742b4c37a957eb5ab8ebee83fdccdcf187/registry/outputs/map_dsc.json) (mismo commit) | Cantidad de DSC por algoritmo y tamaño | **Chile no aparece:** no publica sus DSC en el ICAO PKD |
-| Registro Civil y Diario Oficial | Normas de la cédula | Dicen que sigue ICAO Doc 9303; no publican tamaños de clave |
-| Una cédula real, leída con la app el 2026-10-25 | El DSC dentro del SOD | DSC RSA 2048, firmado por la CSCA 2021 (RSA 3072); SOD con SHA-256 y RSA PKCS#1 v1.5; acceso PACE |
+| ZKPassport registry, `certificates.json` ([URL](https://raw.githubusercontent.com/zkpassport/zkpassport-packages/HEAD/packages/registry-explorer/public/assets/certificates/certificates.json), downloaded on 2026-10-22, sha256 `fc5ce6fe…f321e2`) | CSCAs: modulus, exponent, validity | 4 RSA CSCAs with SHA-256 and exponent 65537: 2013 (3072), 2016 (3072), 2021 (3072), 2024 (4096) |
+| [ZKPassport support rules](https://github.com/zkpassport/zkpassport-packages/blob/fac2812/packages/registry-sdk/src/document-support-rules.json) (commit `fac2812`) | Support level per country | ID card `id_card_support: 0` (`NOT_SUPPORTED`), passport `1`. Even so, a real ID card worked in their app |
+| [Self's CSCA map](https://raw.githubusercontent.com/selfxyz/self/52dba2742b4c37a957eb5ab8ebee83fdccdcf187/registry/outputs/map_csca.json) (commit `52dba274`, 2024-12-01), taken from the ICAO PKD | Number of CSCAs per algorithm and size | 3 RSA 3072 CSCAs with SHA-256 (the 2024 one did not appear yet) |
+| [Self's DSC map](https://raw.githubusercontent.com/selfxyz/self/52dba2742b4c37a957eb5ab8ebee83fdccdcf187/registry/outputs/map_dsc.json) (same commit) | Number of DSCs per algorithm and size | **Chile does not appear:** it does not publish its DSCs in the ICAO PKD |
+| Civil Registry and Diario Oficial | ID card regulations | They say it follows ICAO Doc 9303; they do not publish key sizes |
+| A real ID card, read with the app on 2026-10-25 | The DSC inside the SOD | RSA 2048 DSC, signed by the 2021 CSCA (RSA 3072); SOD with SHA-256 and RSA PKCS#1 v1.5; PACE access |
 
-## Conclusión
+## Conclusion
 
-- **Las CSCA están confirmadas** por dos fuentes independientes: RSA 3072 hasta 2021 y
-  RSA 4096 desde 2024.
-- **El tamaño del DSC sólo está confirmado para una cédula:** RSA 2048 bajo la CSCA 2021.
-  Como Chile no publica sus DSC, la única forma de conocer otros es leer más cédulas. **No
-  se sabe** qué tamaño usan los DSC bajo la CSCA 2024, es decir, las cédulas del formato
-  nuevo emitidas desde diciembre de 2024.
-- **El circuito tiene que aceptar RSA de 2048 a 4096 bits** en las dos firmas. El crate
-  `rsa` ya lo hace; las pruebas cubren 3072/2048 (por omisión) y 4096/4096 (peor caso).
+- **The CSCAs are confirmed** by two independent sources: RSA 3072 up to 2021 and RSA 4096
+  from 2024.
+- **The DSC size is confirmed for one ID card only:** RSA 2048 under the 2021 CSCA. Since
+  Chile does not publish its DSCs, the only way to know others is to read more ID cards. **It
+  is not known** which size the DSCs under the 2024 CSCA use, that is, the new-format ID cards
+  issued since December 2024.
+- **The circuit has to accept RSA from 2048 to 4096 bits** in both signatures. The `rsa`
+  crate already does; the tests cover 3072/2048 (default) and 4096/4096 (worst case).
 
-## Comparación con la lista maestra de la OACI (2026-10-29)
+## Comparison with the ICAO master list (2026-10-29)
 
-Fuente: `ICAO_ML_20261013112327.ml`, descargada por el usuario desde icao.int (sha256
-`fcb9cce9…5ab31f`). La firma CMS verifica (`openssl cms -verify`) con el "ICAO Master List
-Signer", y ese firmante encadena al "United Nations CSCA" (sha256 `920693CD…D92E4E`). Ese
-ancla se tomó del mismo archivo y no se contrastó con otra fuente.
+Source: `ICAO_ML_20261013112327.ml`, downloaded by the user from icao.int (sha256
+`fcb9cce9…5ab31f`). The CMS signature verifies (`openssl cms -verify`) with the "ICAO Master
+List Signer", and that signer chains to the "United Nations CSCA" (sha256
+`920693CD…D92E4E`). That anchor was taken from the same file and not checked against another
+source.
 
-Chile tiene 9 certificados en la lista: 5 claves autofirmadas y 4 certificados de enlace,
-que forman una cadena continua 2013 → 2016 → 2021 → 2024 → 2026.
+Chile has 9 certificates in the list: 5 self-signed keys and 4 link certificates, forming an
+unbroken chain 2013 → 2016 → 2021 → 2024 → 2026.
 
-| Clave | En la lista de la OACI | En `ChileCsca.kt` |
+| Key | In the ICAO list | In `ChileCsca.kt` |
 | --- | --- | --- |
-| 2013, RSA 3072 | Sí | Sí, mismo módulo |
-| 2016, RSA 3072 | Sí | Sí, mismo módulo |
-| 2021, RSA 3072 | Sí | Sí, mismo módulo |
-| 2024, RSA 4096 | Sí | Sí, mismo módulo |
-| **2026, RSA 4096** (emitida el 2026-05-05; firma documentos del 2026-05-05 al 2031-05-05) | Sí | **No** |
+| 2013, RSA 3072 | Yes | Yes, same modulus |
+| 2016, RSA 3072 | Yes | Yes, same modulus |
+| 2021, RSA 3072 | Yes | Yes, same modulus |
+| 2024, RSA 4096 | Yes | Yes, same modulus |
+| **2026, RSA 4096** (issued on 2026-05-05; signs documents from 2026-05-05 to 2031-05-05) | Yes | **No** |
 
-- Las 4 claves de la app son las oficiales.
-- **Falta la de 2026.** Tampoco está en el registro de ZKPassport: su `certificates.json`
-  sigue con el mismo sha256 `fc5ce6fe…`.
-- Un documento cuyo DSC haya firmado la clave 2026 se rechazaría como "CSCA no reconocida".
-  Falla de forma segura, pero falla. **No se sabe** qué documentos usa esa clave (cédulas,
-  pasaportes o ambos).
-- No se copió la clave al repo: los términos de la lista maestra prohíben republicarla sin
-  permiso escrito de la OACI.
+- The app's 4 keys are the official ones.
+- **The 2026 one is missing.** It is not in ZKPassport's registry either: its
+  `certificates.json` still has the same sha256 `fc5ce6fe…`.
+- A document whose DSC was signed by the 2026 key would be rejected as "unrecognized CSCA".
+  It fails safely, but it fails. **It is not known** which documents use that key (ID cards,
+  passports or both).
+- The key was not copied into the repo: the master list's terms forbid republishing it
+  without written ICAO permission.
 
-## Medición con los tamaños reales
+## Measurement with the real sizes
 
-Cédula de prueba regenerada con `gen.py` por omisión (CSCA 3072, DSC 2048). Mac M1 Pro,
-mismo método que la [etapa 1](stage-1-desktop.md), una corrida por fila.
+Test ID card regenerated with `gen.py` defaults (CSCA 3072, DSC 2048). Mac M1 Pro, same
+method as [stage 1](stage-1-desktop.md), one run per row.
 
-| Paso | 4096 / 4096 | 3072 / 2048 |
+| Step | 4096 / 4096 | 3072 / 2048 |
 | --- | --- | --- |
-| Firma del DSC (clave de la CSCA) | 77.050 | 65.335 |
-| Firma del SOD (clave del DSC) | 74.981 | 53.093 |
-| Interpretar SOD y certificados | 21.080 | 15.704 |
-| **Total del programa** | **198.377** | **159.368** |
+| DSC signature (CSCA key) | 77,050 | 65,335 |
+| SOD signature (DSC key) | 74,981 | 53,093 |
+| Parsing the SOD and certificates | 21,080 | 15,704 |
+| **Program total** | **198,377** | **159,368** |
 
-| Recibo | Ciclos totales | Tiempo de prueba | RAM máxima | Tamaño |
+| Receipt | Total cycles | Proving time | Peak RAM | Size |
 | --- | --- | --- | --- | --- |
-| Sucinto | 262.144 | 32,7 s | 2,16 GB | 223.514 B |
-| Compuesto | 262.144 | 26,2 s | 1,75 GB | 256.250 B |
+| Succinct | 262,144 | 32.7 s | 2.16 GB | 223,514 B |
+| Composite | 262,144 | 26.2 s | 1.75 GB | 256,250 B |
 
-- **El tiempo no baja:** 159.368 más 47.344 de paginación suman 206.712, más que
-  2^17 = 131.072, así que la prueba sigue en un segmento de 2^18.
-- **Antes de medir estimé unos 108.000 ciclos**, suponiendo que RSA cuesta el cuadrado del
-  tamaño de la clave. Fue un error: la firma de 2048 bits cuesta el 71% de la de 4096
-  (53.093 / 74.981), no el 25%.
-- **En el Mac la RAM baja:** 2,57 → 2,16 GB en la sucinta. La compuesta dio 26,2 s contra 22,8 s
-  antes; con una sola corrida por fila, esa diferencia puede ser ruido.
+- **Time does not drop:** 159,368 plus 47,344 of paging add up to 206,712, more than
+  2^17 = 131,072, so the proof stays in a 2^18 segment.
+- **Before measuring I estimated about 108,000 cycles**, assuming RSA costs the square of
+  the key size. That was wrong: the 2048-bit signature costs 71% of the 4096-bit one
+  (53,093 / 74,981), not 25%.
+- **On the Mac RAM drops:** 2.57 → 2.16 GB for the succinct proof. The composite gave 26.2 s
+  against 22.8 s before; with a single run per row, that difference may be noise.
 
-### En el S25
+### On the S25
 
-Mismo método que la [etapa 2](stage-2-android.md). `MemAvailable` antes de partir:
-2.941.132 kB. RAM en GB = `VmHWM` × 1.024.
+Same method as [stage 2](stage-2-android.md). `MemAvailable` before starting:
+2,941,132 kB. RAM in GB = `VmHWM` × 1,024.
 
-| Recibo | Corrida | Tiempo de prueba | RAM máxima | Verificación |
+| Receipt | Run | Proving time | Peak RAM | Verification |
 | --- | --- | --- | --- | --- |
-| Sucinto | 1 | 58,58 s | sin dato válido | 14,4 ms |
-| Sucinto | 2 | 64,89 s | sin dato válido | 18,1 ms |
-| Sucinto | 3 | 57,67 s | 2,46 GB (2.406.864 kB) | — |
-| Compuesto | 1 | 43,09 s | sin dato válido | 22,5 ms |
-| Compuesto | 2 | 41,19 s | 2,46 GB (2.405.360 kB) | — |
+| Succinct | 1 | 58.58 s | no valid reading | 14.4 ms |
+| Succinct | 2 | 64.89 s | no valid reading | 18.1 ms |
+| Succinct | 3 | 57.67 s | 2.46 GB (2,406,864 kB) | — |
+| Composite | 1 | 43.09 s | no valid reading | 22.5 ms |
+| Composite | 2 | 41.19 s | 2.46 GB (2,405,360 kB) | — |
 
-- **"Sin dato válido":** en esas corridas el script medía la RAM de un subshell (1,3–1,4
-  MB) en vez de la del probador. Se corrigió antes de las corridas con RAM. Las mediciones
-  de la etapa 2 usaron otro script, que lanzaba el probador directo, y no tienen este
-  problema.
-- **Tiempo:** la sucinta va de 57,7 a 64,9 s, contra 64,7–65,0 s con 4096/4096. La
-  diferencia es chica y del mismo orden que la variación entre corridas.
-- **RAM:** en el teléfono no baja (2,46 GB contra 2,34–2,47 GB), aunque en el Mac bajó.
-  Lo que domina es el tamaño del segmento (2^18), no el de las claves.
+- **"No valid reading":** in those runs the script measured the RAM of a subshell
+  (1.3–1.4 MB) instead of the prover's. It was fixed before the runs with RAM. The stage 2
+  measurements used another script, which launched the prover directly, and do not have
+  this problem.
+- **Time:** the succinct proof ranges from 57.7 to 64.9 s, against 64.7–65.0 s with
+  4096/4096. The difference is small and of the same order as the variation between runs.
+- **RAM:** on the phone it does not drop (2.46 GB against 2.34–2.47 GB), although on the Mac
+  it did. What dominates is the segment size (2^18), not the key size.
