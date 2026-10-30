@@ -1,208 +1,108 @@
-# zero-knowledge-age-proof
+# Prueba de edad
 
-**Tipo:** entrada al proyecto · **Estado:** primera versión funcionando en un Galaxy S25 ·
-**Verificado:** 2026-10-29
+[![Android: funciona](https://img.shields.io/badge/Android-funciona-1F7A4D?logo=android&logoColor=white)](#en-qué-estado-está)
+[![iOS: no disponible](https://img.shields.io/badge/iOS-no%20disponible-8C9BBA?logo=apple&logoColor=white)](#en-qué-estado-está)
+[![SDK para empresas: propuesta](https://img.shields.io/badge/SDK%20para%20empresas-propuesta-8C9BBA)](#un-sdk-para-empresas-propuesta)
+[![Prueba: STARK post-cuántica](https://img.shields.io/badge/prueba-STARK%20post--cu%C3%A1ntica-1846C4)](docs/technical.md#qué-es-post-cuántico-y-qué-no)
+[![Licencia: Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-1846C4)](LICENSE)
 
-Una app Android que lee la cédula chilena por NFC y genera en el teléfono una prueba de
-conocimiento cero de "mayor de 18". Quien verifica la prueba sabe que la firmó el Registro
-Civil, que la persona cumple la edad, que la cédula está vigente y que el chip estaba
-presente. No ve el nombre, el RUN ni la fecha de nacimiento.
+**Demuestra que eres mayor de edad sin mostrar tu cédula.**
 
-La prueba es un STARK de [RISC Zero](https://github.com/risc0/risc0), que sólo usa funciones
-hash. Las presentaciones se firman con ML-DSA-65 (FIPS 204). Es un proyecto de portfolio
-open source y educativo ([decisión 0003](docs/decisions/0003-android-app-post-quantum-proof.md)),
-no un producto: [ZKPassport](https://github.com/zkpassport) y Self ya resuelven la verificación
-de edad con documentos, con sistemas de pruebas que no son post-cuánticos.
+Hoy, para probar que tienes 18 años, entregas tu cédula y quien la mira ve tu nombre, tu
+RUN, tu fecha de nacimiento y tu foto. Esta app hace lo contrario: lee el chip de tu
+cédula chilena con el teléfono y genera una prueba matemática de que eres mayor de 18. Quien
+la recibe sólo sabe eso. No ve tu nombre, tu RUN, tu fecha de nacimiento ni tu foto.
 
-## Cómo funciona
+## Cómo se usa
 
-1. **Lectura.** La app lee DG1 (el MRZ), DG2 (la foto), DG15 y el SOD del chip por PACE, y le
-   pide al chip que firme el inicio del hash de la clave del teléfono (Active Authentication).
-2. **Comparación de cara.** Si la cédula trae foto, la app la compara con la cámara frontal,
-   con una prueba de vida, antes de dejar generar la prueba. Es una comprobación local: no
-   entra en la prueba y no le promete nada al verificador
-   ([decisión 0007](docs/decisions/0007-face-match.md)).
-3. **Prueba, una vez.** El probador corre en el teléfono, en un servicio en segundo plano,
-   y guarda la prueba en el almacenamiento privado de la app
-   ([decisión 0004](docs/decisions/0004-prove-once-present-many.md)).
-4. **Presentación, muchas veces.** El verificador web muestra un QR con un desafío. La app lo
-   escanea y envía la prueba guardada más una firma ML-DSA-65 sobre
-   `"zkage-presentation-v1" || origen || desafío`
-   ([decisión 0005](docs/decisions/0005-web-verifier-with-qr.md)).
+La primera vez, en tres pasos y unos minutos:
 
-Dentro de la prueba, el programa ([`prover/core/src/lib.rs`](prover/core/src/lib.rs))
-comprueba:
+1. **Lees tu cédula con el teléfono.** Muestras el reverso a la cámara (o escribes tres
+   datos) y apoyas la cédula en el teléfono para leer su chip.
+2. **Confirmas que eres tú.** La app compara tu cara con la foto del chip, con una prueba de
+   vida. Todo ocurre en el teléfono.
+3. **El teléfono genera tu prueba.** Tarda entre uno y tres minutos y puedes salir de la app
+   mientras tanto.
 
-1. que el DSC está firmado por la CSCA (RSA);
-2. que el SOD está firmado por el DSC (RSA);
-3. que el `messageDigest` cubre los hashes de los data groups;
-4. que el hash de DG1 coincide con el del SOD;
-5. que la persona tiene la edad mínima y la cédula está vigente en la fecha de la prueba;
-6. que DG15 está en el SOD y la firma P-256 del chip cubre la clave del teléfono, si la
-   cédula tiene Active Authentication
-   ([decisión 0006](docs/decisions/0006-active-authentication-in-proof.md)).
+Después, cada vez que te pidan la edad, tocas **Mostrar mi prueba** y escaneas el código QR
+que te muestran. El sitio recibe sólo un "sí, es mayor de 18".
 
-Lo único que sale de la prueba es el `Claim`: hash de la CSCA, fecha, edad mínima, hash de la
-clave ML-DSA del teléfono y `chip_authenticated`.
+Nada de tu cédula sale del teléfono: ni los datos, ni la foto, ni las imágenes de la cámara.
 
-## Qué es post-cuántico y qué no
+## Dónde se aplicaría
 
-| Capa | Algoritmo | ¿Post-cuántico? |
+En cualquier lugar donde hoy se pide la cédula sólo para ver la edad:
+
+- **Comercio en línea** de productos con restricción de edad, como alcohol o tabaco.
+- **Entradas a eventos y locales**: en la puerta, la persona escanea el QR del verificador en
+  vez de entregar la cédula.
+- **Sitios y apps con contenido para adultos**, sin pedir una copia de la cédula ni guardar
+  datos personales.
+- **Cualquier servicio que deba comprobar la edad** y prefiera no recibir datos que después
+  tiene que proteger.
+
+Para quien verifica, la ventaja es no guardar datos personales que proteger. La prueba dice
+también que el documento lo firmó el Registro Civil, que está vigente y que el chip original
+estaba junto al teléfono.
+
+## Qué usa
+
+| Pieza | Qué hace | Con qué |
 | --- | --- | --- |
-| Prueba de conocimiento cero | STARK sucinto de RISC Zero, sin envolver en Groth16 | Sí, porque sólo usa funciones hash. Es la pieza central |
-| Firma de cada presentación | ML-DSA-65 (FIPS 204) | Sí. En el S25 la clave es de software, con la semilla cifrada por una clave AES de StrongBox. El Keystore con ML-DSA llega en Android 17 (API 37) |
-| Firmas del Registro Civil (CSCA → DSC → SOD) | RSA 2048/3072/4096 con SHA-256 | **No**, y no depende de este proyecto |
-| Active Authentication del chip | ECDSA P-256 | **No**: es la clave de la cédula |
-| Canal con el verificador web | TLS de rustls con el proveedor `ring` y certificado autofirmado fijado por el QR | **No**: `ring` no trae ML-KEM, así que el intercambio de claves es clásico. Protege la privacidad del envío; la validez la dan la prueba y la firma |
+| Chip de la cédula | Trae los datos firmados por el Registro Civil | NFC, estándar ICAO 9303, [JMRTD](https://jmrtd.org) |
+| Lectura del reverso | Llena los datos de acceso al chip sin escribirlos | ML Kit de Google, en el teléfono |
+| Comparación de cara | Comprueba que quien usa la app es la persona de la foto | YuNet y SFace (OpenCV Zoo), en el teléfono |
+| Prueba de conocimiento cero | Demuestra "mayor de 18" sin revelar nada más | STARK de [RISC Zero](https://github.com/risc0/risc0), que sólo usa funciones hash |
+| Firma del teléfono | Liga la prueba a tu teléfono y a cada sitio | ML-DSA-65 (FIPS 204) |
 
-Un computador cuántico que rompa RSA podría fabricar una cédula falsa y probar con ella.
-Lo que no podría es fabricar una prueba sin pasar por una cédula: esa parte es la
-post-cuántica.
+**Por qué post-cuántica:** la prueba y la firma del teléfono resisten un computador
+cuántico. Otros proyectos parecidos, como [ZKPassport](https://github.com/zkpassport) o la
+[librería experimental de la Comisión Europea](https://github.com/eu-digital-identity-wallet/av-lib-android-zkp-age-icao),
+usan criptografía de curvas elípticas, que no la resiste. Hay un límite: las firmas del Registro Civil son RSA y las elige el Estado
+([detalle](docs/technical.md#qué-es-post-cuántico-y-qué-no)).
 
-## Medido
+## En qué estado está
 
-Los números son de una cédula de prueba, salvo la última fila. Cada fila es una sola
-corrida; las condiciones están en [`docs/measurements/`](docs/measurements).
-
-| Dónde | Qué | Tiempo | RAM máxima |
-| --- | --- | --- | --- |
-| Mac (Apple Silicon) | Prueba, segmento de 2^19 | 59,5 s | 2,62 GB |
-| Galaxy S25, por `adb` | Prueba, segmento de 2^19 | 128,6 s | 4,41 GB |
-| Galaxy S25, por `adb` | Prueba, segmento de 2^18 | 195,4 s | 2,47 GB |
-| Galaxy S25, por `adb` | Prueba, segmento de 2^17 | 366,1 s | 1,52 GB |
-| Galaxy S25, en la app | Prueba con la cédula real, segmento de 2^19 | 92,5 s | no medida |
-
-- La prueba pesa 223.778 B. Verificarla tarda 12,5 ms en el Mac y unos 20 ms en el S25.
-- El programa usa 379.900 ciclos. La firma P-256 del chip se lleva 217.412
-  ([medición](docs/measurements/active-auth.md)).
-- La app elige el segmento según la RAM del teléfono: el más grande cuyo pico quepa en el 40%
-  ([`SegmentSize.kt`](android/app/src/main/kotlin/cl/zkage/app/SegmentSize.kt)). El 40% es
-  un criterio, no una medición.
-
-## Límites conocidos
-
-- **Las presentaciones se pueden enlazar.** Todos los verificadores reciben la misma prueba y
-  la misma clave pública, así que dos verificadores que junten sus datos saben que fue la
-  misma persona, aunque no sepan quién ([decisión 0004](docs/decisions/0004-prove-once-present-many.md)).
-- **La prueba demuestra que el chip estaba presente, no que lo usó su dueño.** La app
-  compara la cara con la foto del chip, pero quien compile el código sin esa comprobación
-  genera pruebas igual de válidas. Además, la prueba de vida detiene una foto, no un video ni
-  una máscara ([decisión 0007](docs/decisions/0007-face-match.md)).
-- **El ligado del chip a la clave del teléfono es de 64 bits**: el desafío de Active
-  Authentication mide 8 bytes ([decisión 0006](docs/decisions/0006-active-authentication-in-proof.md)).
-- **Sólo se probó en un teléfono**, un Galaxy S25 con 12 GB de RAM. Un teléfono de gama
-  media o antiguo, o el límite de memoria por app de Android 17, pueden hacer que la prueba
-  tarde mucho más o no termine: no se ha medido.
-- **La APK de debug pesa 200 MB** con una compilación limpia. 104 MB son la librería del
-  probador y la comparación de cara, y 39 MB los modelos de cara.
-- **Las cédulas aceptadas son las chilenas**, contra las 4 CSCA de Chile en
-  [`ChileCsca.kt`](android/verifier/src/main/kotlin/cl/zkage/verifier/ChileCsca.kt). Las
-  claves vienen del registro público de ZKPassport.
-- Lo que el diseño original pedía más allá de esto (una cédula por teléfono, revalidación
-  anual) está en pausa ([decisión 0001](docs/decisions/0001-credential-without-personal-data.md),
-  [decisión 0002](docs/decisions/0002-device-registry.md)).
-
-## Primeros pasos
-
-Probado en macOS con Apple Silicon. Necesita:
-
-- Rust (rustup) y el toolchain de RISC Zero (`rzup`), que deja `r0vm` en `~/.risc0/bin`;
-- JDK 17 para Gradle;
-- para Android, el NDK de Homebrew (`android-ndk`) y `rustup target add aarch64-linux-android`.
-
-**Verificación rápida** (unos 20 s en el Mac, sin teléfono):
-
-```sh
-cd prover
-cargo test --release -p age-core -p age-verifier
-```
-
-Corre 28 tests con la cédula de prueba de
-[`prover/fixtures/gen.py`](prover/fixtures/gen.py). No uses `RISC0_SKIP_BUILD=1` aquí: con
-esa variable el image ID no es el del programa y los tests de presentación fallan con
-`Err(Proof)`.
-
-**Comparación de cara** (unos 3 minutos la primera vez, por la compilación): baja los modelos
-y prueba con retratos de dominio público.
-
-```sh
-prover/scripts/download-face-models.sh
-cd prover && cargo test --release -p facematch
-```
-
-**Tests de Kotlin**, el lector de cédula, la Active Authentication, ML-DSA, la foto del chip y
-la elección de segmento (33 tests):
-
-```sh
-cd android
-JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :verifier:test :app:testDebugUnitTest
-```
-
-**Prueba en el computador** (alrededor de 1 minuto), con la cédula de prueba:
-
-```sh
-cd prover
-cargo run --release -p host -- succinct
-```
-
-`execute` en vez de `succinct` sólo cuenta los ciclos.
-
-## Demo con una cédula y un teléfono
-
-1. Baja los modelos de cara, compila la librería del probador y la app, e instálala:
-
-   ```sh
-   prover/scripts/download-face-models.sh
-   prover/scripts/build-android-lib.sh
-   cd android && JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :app:assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
-
-2. Levanta el verificador sólo en el computador y abre un túnel por USB:
-
-   ```sh
-   cd prover && cargo run --release -p verifier-web -- --host 127.0.0.1
-   adb reverse tcp:8443 tcp:8443
-   ```
-
-   Uso `127.0.0.1` porque en una red con IPs públicas el servidor quedaría expuesto. Si el
-   teléfono muestra `ConnectException: Failed to connect to /127.0.0.1:8443`, es que el túnel
-   se cayó: `adb reverse --list` sale vacío, y se arregla repitiendo `adb reverse`.
-   El servidor acepta además `--trust-mock`, para la CSCA de prueba, y `--allow-no-chip`, para
-   pruebas sin Active Authentication.
-3. En la app, escribe el número de documento y las fechas de nacimiento y de vencimiento
-   (`AAMMDD`), toca "Leer cédula" y acerca la cédula. En el resultado, toca "Comparar mi
-   cara" y, cuando coincida, "Generar prueba".
-4. Abre https://127.0.0.1:8443 en el computador, acepta el certificado autofirmado y escanea
-   el QR con "Presentar mi prueba".
-
-Los tests instrumentados de Android borran claves y desinstalan la app. Córrelos sólo en un
-emulador (`ANDROID_SERIAL=emulator-5554`).
-
-## Mapa del repositorio
-
-| Carpeta | Qué hay |
+| Parte | Estado |
 | --- | --- |
-| [`prover/core`](prover/core) | Las comprobaciones de la cédula, en Rust `no_std`. Las usan el programa dentro de la prueba y los tests |
-| [`prover/methods`](prover/methods) | El programa (guest) de RISC Zero y su compilación |
-| [`prover/host`](prover/host) | Probador de línea de comandos, para el computador y las mediciones por `adb` |
-| [`prover/ffi`](prover/ffi) | El probador como librería JNI para la app |
-| [`prover/verifier`](prover/verifier), [`prover/verifier-web`](prover/verifier-web) | La librería que verifica presentaciones y el servidor web con QR |
-| [`prover/facematch`](prover/facematch) | Comparación de cara y prueba de vida, adaptadas del código de ZKPassport |
-| [`prover/fixtures`](prover/fixtures) | Generador de la cédula de prueba. Las claves son desechables |
-| [`android/app`](android/app) | La app: lectura NFC con JMRTD, comparación de cara, clave del teléfono, servicio del probador, presentación |
-| [`android/verifier`](android/verifier) | Verificación en Kotlin de la cédula, de Active Authentication y de ML-DSA |
+| App Android | **Funciona.** Probada con una cédula real en un Galaxy S25: leyó el chip, comparó la cara, generó la prueba en 92,5 s y el verificador la aceptó. Sólo se ha probado en ese teléfono |
+| Interfaz accesible (modo oscuro, letra hasta 200%, etiquetas para lector de pantalla) | Implementada el 2026-10-29. Recorrida en el S25 con la cédula real hasta generar la prueba (2026-10-30). Falta probar la lectura del reverso con una cédula real, presentar la prueba nueva y usarla con TalkBack |
+| Verificador web | **De referencia.** Funciona en una red local, para demostraciones |
+| iOS | **No disponible.** No hay código para iPhone |
+| SDK para empresas | **Propuesta, no implementada** ([abajo](#un-sdk-para-empresas-propuesta)) |
+| Play Store | No publicada |
+| Auditoría de seguridad | No hecha |
 
-## Documentación
+Es un proyecto open source y educativo, no un producto
+([decisión 0003](docs/decisions/0003-android-app-post-quantum-proof.md)). Si puede pasar a uso
+real está en discusión en la [decisión 0008](docs/decisions/0008-real-use-and-whether-to-continue.md).
 
-| Documento | Tipo |
-| --- | --- |
-| [`docs/plan.md`](docs/plan.md) | Plan por etapas y su estado |
-| [`docs/decisions/`](docs/decisions) | Decisiones, de la 0001 a la 0007 |
-| [`docs/measurements/`](docs/measurements) | Mediciones, con fecha y condiciones |
+## Un SDK para empresas (propuesta)
+
+> **No implementado.** Lo que sigue es una propuesta. Hoy existen el verificador web de
+> referencia ([`prover/verifier-web`](prover/verifier-web)) y la librería en Rust que verifica
+> presentaciones ([`prover/verifier`](prover/verifier)).
+
+La idea es que un comercio no tenga que entender la criptografía para aceptar la prueba.
+Bastarían dos piezas:
+
+1. **Un componente para su página o app** que muestra el QR y espera la respuesta del
+   teléfono, como hace hoy el verificador web.
+2. **Una librería para su servidor** que comprueba la prueba y devuelve sólo "mayor de 18: sí
+   o no", para los lenguajes más usados.
+
+Cada verificador podría diseñar su propia pantalla. Lo que no cambia es la pantalla de la
+app que pregunta "¿Mostrar tu prueba a este sitio?". Ahí la persona ve qué sitio pide la
+prueba y qué va a saber.
+
+## Para desarrolladores
+
+Cómo funciona por dentro, lo medido, los límites conocidos y cómo compilar y probar están en
+la [documentación técnica](docs/technical.md). Las decisiones están en
+[`docs/decisions/`](docs/decisions) y las mediciones en [`docs/measurements/`](docs/measurements).
 
 ## Licencia
 
-[Apache-2.0](LICENSE). Las dependencias tienen su propia licencia; JMRTD y SCUBA son LGPL.
-YuNet es MIT y SFace Apache-2.0; el script de descarga guarda sus licencias junto a los
-modelos.
+[Apache-2.0](LICENSE). Las dependencias tienen su propia licencia: JMRTD y SCUBA son LGPL,
+YuNet es MIT y SFace Apache-2.0. La letra Atkinson Hyperlegible Next es SIL OFL 1.1; su
+licencia va en [`android/app/src/main/assets/licenses`](android/app/src/main/assets/licenses).
