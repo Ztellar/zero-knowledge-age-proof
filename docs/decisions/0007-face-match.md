@@ -145,10 +145,12 @@ Verificado el 2026-10-29.
   - no deja generar la prueba hasta que la cara coincide.
 
   Una cédula sin DG2 genera la prueba sin comparar la cara. Nada de esto entra en la prueba.
-- **Prueba de vida:** mirar de frente, girar la cabeza hacia cada lado en cualquier orden y
-  volver a mirar de frente. Los cuadros de frente exigen la similitud completa (0,363); los
-  girados, 0,15. Si la cara se pierde por más de 10 cuadros, los giros se reinician. Detiene
-  una foto; no detiene un video ni una máscara.
+- **Prueba de vida:** mirar de frente, girar la cabeza a la derecha, después a la izquierda, y
+  volver a mirar de frente. El orden es fijo desde el 2026-10-30: el usuario lo probó en el
+  S25 y la pantalla mostraba una secuencia que la app no exigía. Girar al lado equivocado no
+  cuenta. Los cuadros de frente exigen la similitud completa (0,363); los girados, 0,15. Si la
+  cara se pierde por más de 10 cuadros, los giros se reinician. Detiene una foto; no detiene
+  un video ni una máscara.
 
 Diferencias con ZKPassport, cada una por algo medido en el S25:
 

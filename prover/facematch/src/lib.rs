@@ -174,13 +174,17 @@ pub enum Turn {
     ImageLeft,
 }
 
+/// The turns in the order they are asked: the person's own right, then their left. The image
+/// is not mirrored, so the person's right is the image's left.
+pub const TURNS: [Turn; 2] = [Turn::ImageLeft, Turn::ImageRight];
+
 /// What the liveness check still needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Liveness {
     /// Look straight at the camera; the frames so far, out of [CENTER_FRAMES].
     Center(u8),
-    /// Turn the head to each side; whether each [Turn], in declaration order, is done.
-    Turns([bool; 2]),
+    /// Turn the head to the side `TURNS[i]`; the turns before it are done.
+    Turn(usize),
     /// Look straight at the camera again; the frames so far, out of [CENTER_FRAMES].
     Confirm(u8),
     Done,
@@ -205,8 +209,8 @@ const TURN_SIMILARITY: f32 = 0.15;
 /// Frames without a face that restart the turns: about a second at the S25's rate.
 const MAX_LOST_FRAMES: u8 = 10;
 
-/// Liveness against a still photo: the person looks ahead, turns the head to each side in any
-/// order, and looks ahead again. A flat photo cannot turn. The face must match the chip photo
+/// Liveness against a still photo: the person looks ahead, turns the head to their right, then
+/// to their left ([TURNS]), and looks ahead again. A turn to the wrong side does not count. A flat photo cannot turn. The face must match the chip photo
 /// at the start and the end, stay similar while turning, and not leave the frame for long. It
 /// does not stop a video or a mask.
 ///
@@ -235,12 +239,9 @@ impl LivenessCheck {
                     self.center.push(pose);
                 }
             }
-            Liveness::Turns(_) => {
-                if similarity >= TURN_SIMILARITY {
-                    if let Some(turn) = self.turn(pose) {
-                        let n = &mut self.turns[turn as usize];
-                        *n = (*n + 1).min(TURN_FRAMES);
-                    }
+            Liveness::Turn(i) => {
+                if similarity >= TURN_SIMILARITY && self.turn(pose) == Some(TURNS[i]) {
+                    self.turns[i] += 1;
                 }
             }
             Liveness::Confirm(_) => {
@@ -257,7 +258,7 @@ impl LivenessCheck {
     /// cannot be swapped out of view.
     pub fn lost(&mut self) -> Liveness {
         self.lost = self.lost.saturating_add(1);
-        if self.lost > MAX_LOST_FRAMES && matches!(self.state(), Liveness::Turns(_) | Liveness::Confirm(_)) {
+        if self.lost > MAX_LOST_FRAMES && matches!(self.state(), Liveness::Turn(_) | Liveness::Confirm(_)) {
             self.turns = [0; 2];
             self.confirm = 0;
         }
@@ -267,13 +268,24 @@ impl LivenessCheck {
     pub fn state(&self) -> Liveness {
         if self.neutral().is_none() {
             Liveness::Center(self.center.len() as u8)
-        } else if self.turns.iter().any(|&n| n < TURN_FRAMES) {
-            Liveness::Turns(self.turns.map(|n| n >= TURN_FRAMES))
+        } else if let Some(i) = self.turns.iter().position(|&n| n < TURN_FRAMES) {
+            Liveness::Turn(i)
         } else if self.confirm < CENTER_FRAMES {
             Liveness::Confirm(self.confirm)
         } else {
             Liveness::Done
         }
+    }
+
+    /// How far the head is turned toward the side asked now, as a fraction of a full turn: 1 or
+    /// more is far enough, below 0 is the wrong side. None outside the turns. For the screen only.
+    pub fn reach(&self, pose: Pose) -> Option<f32> {
+        let Liveness::Turn(i) = self.state() else { return None };
+        let dx = pose.yaw - self.neutral()?.yaw;
+        Some(match TURNS[i] {
+            Turn::ImageLeft => dx,
+            Turn::ImageRight => -dx,
+        } / TURN_YAW)
     }
 
     /// The side the head is turned to, if far enough from neutral.
@@ -394,11 +406,11 @@ mod tests {
         let mut check = LivenessCheck::default();
         let same = 0.6;
         assert_eq!(check.feed(at(0.0, -0.16), same), Liveness::Center(1));
-        assert_eq!(check.feed(at(0.02, -0.16), same), Liveness::Turns([false; 2]));
+        assert_eq!(check.feed(at(0.02, -0.16), same), Liveness::Turn(0));
         // Small movements and nods do not count.
-        assert_eq!(hold(&mut check, at(0.1, -0.16), same, 5), Liveness::Turns([false; 2]));
-        assert_eq!(hold(&mut check, at(0.0, 0.3), same, 5), Liveness::Turns([false; 2]));
-        assert_eq!(hold(&mut check, at(0.2, -0.16), 0.3, TURN_FRAMES), Liveness::Turns([false, true]));
+        assert_eq!(hold(&mut check, at(0.1, -0.16), same, 5), Liveness::Turn(0));
+        assert_eq!(hold(&mut check, at(0.0, 0.3), same, 5), Liveness::Turn(0));
+        assert_eq!(hold(&mut check, at(0.2, -0.16), 0.3, TURN_FRAMES), Liveness::Turn(1));
         assert_eq!(hold(&mut check, at(-0.2, -0.16), same, TURN_FRAMES), Liveness::Confirm(0));
         // The last frames must be frontal and fully match again.
         assert_eq!(check.feed(at(0.0, -0.16), 0.3), Liveness::Confirm(0));
@@ -411,7 +423,7 @@ mod tests {
         let mut check = LivenessCheck::default();
         assert_eq!(hold(&mut check, at(0.0, -0.16), 0.2, 10), Liveness::Center(0));
         hold(&mut check, at(0.0, -0.16), 0.6, CENTER_FRAMES);
-        assert_eq!(hold(&mut check, at(0.4, -0.16), 0.1, 10), Liveness::Turns([false; 2]));
+        assert_eq!(hold(&mut check, at(0.4, -0.16), 0.1, 10), Liveness::Turn(0));
     }
 
     #[test]
@@ -419,20 +431,37 @@ mod tests {
         let mut check = LivenessCheck::default();
         hold(&mut check, at(0.0, 0.0), 0.6, CENTER_FRAMES);
         hold(&mut check, at(0.2, 0.0), 0.6, TURN_FRAMES);
-        assert_eq!(check.state(), Liveness::Turns([false, true]));
+        assert_eq!(check.state(), Liveness::Turn(1));
         for _ in 0..MAX_LOST_FRAMES {
             check.lost();
         }
-        assert_eq!(check.state(), Liveness::Turns([false, true]));
-        assert_eq!(check.lost(), Liveness::Turns([false; 2]));
+        assert_eq!(check.state(), Liveness::Turn(1));
+        assert_eq!(check.lost(), Liveness::Turn(0));
     }
 
     #[test]
-    fn turns_are_named_by_the_image() {
+    fn turns_go_right_then_left() {
         let mut check = LivenessCheck::default();
         hold(&mut check, at(0.0, 0.0), 0.6, CENTER_FRAMES);
-        // Negative yaw: the nose is nearer the image-right eye.
-        assert_eq!(hold(&mut check, at(-0.2, 0.0), 0.6, TURN_FRAMES), Liveness::Turns([true, false]));
+        // Negative yaw: the nose is nearer the image-right eye, a turn to the person's left.
+        // Asked first is the right, so the left does not count yet.
+        assert_eq!(hold(&mut check, at(-0.2, 0.0), 0.6, 10), Liveness::Turn(0));
+        assert_eq!(hold(&mut check, at(0.2, 0.0), 0.6, TURN_FRAMES), Liveness::Turn(1));
+        // Turning right again does not do the left.
+        assert_eq!(hold(&mut check, at(0.2, 0.0), 0.6, 10), Liveness::Turn(1));
+        assert_eq!(hold(&mut check, at(-0.2, 0.0), 0.6, TURN_FRAMES), Liveness::Confirm(0));
+    }
+
+    #[test]
+    fn reach_is_toward_the_side_asked() {
+        let mut check = LivenessCheck::default();
+        assert_eq!(check.reach(at(0.1, 0.0)), None);
+        hold(&mut check, at(0.0, 0.0), 0.6, CENTER_FRAMES);
+        let reach = |check: &LivenessCheck, yaw| check.reach(at(yaw, 0.0)).unwrap();
+        assert!((reach(&check, TURN_YAW / 2.0) - 0.5).abs() < 1e-6);
+        assert!((reach(&check, -TURN_YAW) + 1.0).abs() < 1e-6);
+        hold(&mut check, at(0.2, 0.0), 0.6, TURN_FRAMES);
+        assert!((reach(&check, -TURN_YAW) - 1.0).abs() < 1e-6);
     }
 
     /// A sideways turn foreshortens the face horizontally; that alone must not read as a tilt.

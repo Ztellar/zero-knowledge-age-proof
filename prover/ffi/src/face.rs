@@ -55,11 +55,10 @@ pub extern "system" fn Java_cl_zkage_app_NativeFace_open<'local>(
 
 /// Checks one camera frame, RGBA as CameraX delivers it, turned upright by `rotation`
 /// degrees clockwise. Returns `[face found (0 or 1), similarity to the chip photo, liveness
-/// state (0 center, 1 turns, 2 done, 3 confirm), center or confirm frames, turns done as bits in
-/// [Turn] order, yaw,
-/// pitch]`.
+/// state (0 center, 1 turns, 2 done, 3 confirm), center or confirm frames, turns done (0 to 2,
+/// in [TURNS] order), yaw, pitch, reach toward the side asked (NaN outside the turns)]`.
 ///
-/// [Turn]: facematch::Turn
+/// [TURNS]: facematch::TURNS
 #[no_mangle]
 pub extern "system" fn Java_cl_zkage_app_NativeFace_frame<'local>(
     mut env: JNIEnv<'local>,
@@ -84,11 +83,12 @@ pub extern "system" fn Java_cl_zkage_app_NativeFace_frame<'local>(
             _ => rgb,
         };
         let Some(face) = session.matcher.detect(&upright).map_err(|e| state(e.to_string()))?.first().copied() else {
-            return Ok(encode(false, 0.0, session.check.lost(), None));
+            return Ok(encode(false, 0.0, session.check.lost(), None, None));
         };
         let similarity = cosine(&session.chip, &session.matcher.embed(&upright, &face).map_err(|e| state(e.to_string()))?);
         let pose = pose(&face);
-        Ok(encode(true, similarity, session.check.feed(pose, similarity), Some(pose)))
+        let liveness = session.check.feed(pose, similarity);
+        Ok(encode(true, similarity, liveness, Some(pose), session.check.reach(pose)))
     })();
     match result.and_then(|out| {
         let array = env.new_float_array(out.len() as i32).map_err(|e| ("java/lang/IllegalStateException", e.to_string()))?;
@@ -100,15 +100,15 @@ pub extern "system" fn Java_cl_zkage_app_NativeFace_frame<'local>(
     }
 }
 
-fn encode(found: bool, similarity: f32, liveness: Liveness, pose: Option<Pose>) -> Vec<f32> {
+fn encode(found: bool, similarity: f32, liveness: Liveness, pose: Option<Pose>, reach: Option<f32>) -> Vec<f32> {
     let (state, center, turns) = match liveness {
         Liveness::Center(n) => (0, n, 0),
-        Liveness::Turns(done) => (1, 0, done.iter().enumerate().map(|(i, &d)| (d as u8) << i).sum()),
-        Liveness::Confirm(n) => (3, n, 0b11),
-        Liveness::Done => (2, 0, 0b11),
+        Liveness::Turn(i) => (1, 0, i as u8),
+        Liveness::Confirm(n) => (3, n, 2),
+        Liveness::Done => (2, 0, 2),
     };
     let (yaw, pitch) = pose.map_or((0.0, 0.0), |p| (p.yaw, p.pitch));
-    vec![found as u8 as f32, similarity, state as f32, f32::from(center), f32::from(turns), yaw, pitch]
+    vec![found as u8 as f32, similarity, state as f32, f32::from(center), f32::from(turns), yaw, pitch, reach.unwrap_or(f32::NAN)]
 }
 
 /// Frees the session, with the chip photo's embedding.
