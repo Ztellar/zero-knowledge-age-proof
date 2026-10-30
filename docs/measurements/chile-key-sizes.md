@@ -25,6 +25,33 @@ las cédulas reales, y saber qué tamaños tiene que soportar el circuito.
 - **El circuito tiene que aceptar RSA de 2048 a 4096 bits** en las dos firmas. El crate
   `rsa` ya lo hace; las pruebas cubren 3072/2048 (por omisión) y 4096/4096 (peor caso).
 
+## Comparación con la lista maestra de la OACI (2026-10-29)
+
+Fuente: `ICAO_ML_20261013112327.ml`, descargada por el usuario desde icao.int (sha256
+`fcb9cce9…5ab31f`). La firma CMS verifica (`openssl cms -verify`) con el "ICAO Master List
+Signer", y ese firmante encadena al "United Nations CSCA" (sha256 `920693CD…D92E4E`). Ese
+ancla se tomó del mismo archivo y no se contrastó con otra fuente.
+
+Chile tiene 9 certificados en la lista: 5 claves autofirmadas y 4 certificados de enlace,
+que forman una cadena continua 2013 → 2016 → 2021 → 2024 → 2026.
+
+| Clave | En la lista de la OACI | En `ChileCsca.kt` |
+| --- | --- | --- |
+| 2013, RSA 3072 | Sí | Sí, mismo módulo |
+| 2016, RSA 3072 | Sí | Sí, mismo módulo |
+| 2021, RSA 3072 | Sí | Sí, mismo módulo |
+| 2024, RSA 4096 | Sí | Sí, mismo módulo |
+| **2026, RSA 4096** (emitida el 2026-05-05; firma documentos del 2026-05-05 al 2031-05-05) | Sí | **No** |
+
+- Las 4 claves de la app son las oficiales.
+- **Falta la de 2026.** Tampoco está en el registro de ZKPassport: su `certificates.json`
+  sigue con el mismo sha256 `fc5ce6fe…`.
+- Un documento cuyo DSC haya firmado la clave 2026 se rechazaría como "CSCA no reconocida".
+  Falla de forma segura, pero falla. **No se sabe** qué documentos usa esa clave (cédulas,
+  pasaportes o ambos).
+- No se copió la clave al repo: los términos de la lista maestra prohíben republicarla sin
+  permiso escrito de la OACI.
+
 ## Medición con los tamaños reales
 
 Cédula de prueba regenerada con `gen.py` por omisión (CSCA 3072, DSC 2048). Mac M1 Pro,
