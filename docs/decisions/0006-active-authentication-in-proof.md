@@ -43,7 +43,8 @@ deja una firma que se pueda verificar después, dentro de la prueba.
 3. El journal gana un booleano `chip_authenticated`; la clave de DG15 no sale de la prueba
    (identifica a la cédula). El verificador puede exigirlo en su `Policy`, y el verificador
    web lo exige salvo con `--allow-no-chip`. Una cédula sin DG15, o con una clave que no sea
-   P-256, sigue pudiendo probar, con `chip_authenticated = false`.
+   P-256, sigue pudiendo probar, con `chip_authenticated = false`. **Desde el 2026-10-29 la
+   app ya no genera esas pruebas: la [0009](0009-chip-must-be-original.md) la detiene antes.**
 4. El programa ya no cabe en un segmento de 2^18. La app elige el tamaño del segmento según
    la RAM del teléfono (`SegmentSize`): el más grande cuyo pico medido quepa en el 40% de la
    RAM. Es un criterio propio, no una medición.

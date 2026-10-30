@@ -25,8 +25,12 @@ class ProverService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
+        // Progress is silent; the result makes a sound, so the user who left the app hears it.
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Generación de la prueba", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL, "Prueba en curso", NotificationManager.IMPORTANCE_LOW),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(RESULT_CHANNEL, "Prueba lista o fallida", NotificationManager.IMPORTANCE_DEFAULT),
         )
         // The `specialUse` type exists from API 34; older versions take no type here.
         if (Build.VERSION.SDK_INT >= 34) {
@@ -64,22 +68,22 @@ class ProverService : Service() {
 
     private fun ongoing(): Notification = Notification.Builder(this, CHANNEL)
         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-        .setContentTitle("Generando la prueba de edad")
-        .setContentText("Tarda entre uno y tres minutos. Puedes salir de la app.")
+        .setContentTitle("Generando tu prueba de edad")
+        .setContentText("Suele tardar entre uno y tres minutos.")
         .setUsesChronometer(true)
         .setProgress(0, 0, true)
         .setOngoing(true)
         .setContentIntent(openApp())
         .build()
 
-    private fun finished(result: ProofJob.State): Notification = Notification.Builder(this, CHANNEL)
+    private fun finished(result: ProofJob.State): Notification = Notification.Builder(this, RESULT_CHANNEL)
         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-        .setContentTitle(if (result is ProofJob.State.Done) "Prueba generada" else "No se pudo generar la prueba")
+        .setContentTitle(if (result is ProofJob.State.Done) "Tu prueba de edad está lista" else "No se pudo generar la prueba")
         .setContentText(
-            when (result) {
-                is ProofJob.State.Done -> "Lista en ${"%.0f".format(result.seconds)} s. Toca para verla."
-                is ProofJob.State.Failed -> result.message
-                else -> ""
+            if (result is ProofJob.State.Done) {
+                "Toca para verla. Ya puedes mostrarla donde te pidan la edad."
+            } else {
+                "Toca para intentarlo de nuevo. No tienes que volver a leer la cédula."
             },
         )
         .setAutoCancel(true)
@@ -88,6 +92,7 @@ class ProverService : Service() {
 
     private companion object {
         const val CHANNEL = "prover"
+        const val RESULT_CHANNEL = "prover-result"
         const val ONGOING_ID = 1
         const val DONE_ID = 2
     }

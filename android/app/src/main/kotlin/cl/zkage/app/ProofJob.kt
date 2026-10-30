@@ -29,7 +29,8 @@ object ProofJob {
             val presentation: Presentation,
             val segment: SegmentSize,
         ) : State
-        data class Failed(val message: String) : State
+        /** [message] is for the user; [detail] is the exception, for the technical details. */
+        data class Failed(val message: String, val detail: String = "") : State
     }
 
     /**
@@ -55,6 +56,13 @@ object ProofJob {
     @Volatile
     private var pending: Input? = null
 
+    /** The last input, kept until a proof succeeds so a failure can retry without the card. */
+    @Volatile
+    private var last: Input? = null
+
+    /** A failed proof can run again from the same chip data and device key. */
+    val canRetry: Boolean get() = last != null && state.value is State.Failed
+
     /**
      * Starts proving in [ProverService]. Ignored while a proof is already running. [key] is the
      * device key whose hash the chip signed when the card was read; [chipAnswer] is that
@@ -62,25 +70,40 @@ object ProofJob {
      */
     fun start(context: Context, csca: CscaKey, chip: ChipData, key: DeviceKey, chipAnswer: ActiveAuthAnswer?) {
         if (state.value is State.Running) return
-        pending = Input(csca, chip.sod, chip.dg1, chipAnswer?.dg15 ?: ByteArray(0), chipAnswer?.response ?: ByteArray(0), key)
+        launch(context, Input(csca, chip.sod, chip.dg1, chipAnswer?.dg15 ?: ByteArray(0), chipAnswer?.response ?: ByteArray(0), key))
+    }
+
+    /** Runs the last failed proof again; false if there is nothing to retry. */
+    fun retry(context: Context): Boolean {
+        val input = last?.takeIf { state.value is State.Failed } ?: return false
+        launch(context, input)
+        return true
+    }
+
+    private fun launch(context: Context, input: Input) {
+        pending = input
+        last = input
         mutableState.value = State.Running(System.currentTimeMillis())
         try {
             context.startForegroundService(Intent(context, ProverService::class.java))
         } catch (e: RuntimeException) {
             // e.g. ForegroundServiceStartNotAllowedException: never leave the UI stuck on Running.
             pending = null
-            mutableState.value = State.Failed("Android no dejó iniciar el servicio: ${e.message}")
+            mutableState.value = State.Failed("Android no dejó empezar el cálculo en segundo plano.", "${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
     /** Back to idle once the UI has shown the result. */
     fun reset() {
-        if (state.value !is State.Running) mutableState.value = State.Idle
+        if (state.value is State.Running) return
+        mutableState.value = State.Idle
+        // Leaving the failure screen gives up the retry: the chip data leaves memory.
+        last = null
     }
 
     /** Blocking; called by [ProverService] on its worker thread. Returns the final state. */
     internal fun runPending(context: Context): State {
-        val input = pending ?: return State.Failed("no hay datos de la cédula para probar").also { mutableState.value = it }
+        val input = pending ?: return State.Failed("Se perdieron los datos de la cédula. Vuelve a leerla.", "no pending input").also { mutableState.value = it }
         pending = null
         val started = (state.value as? State.Running)?.startedAt ?: System.currentTimeMillis()
         val result = try {
@@ -94,11 +117,15 @@ object ProofJob {
             File(context.filesDir, Presenter.PROOF_FILE).writeBytes(proof.raw)
             // Only now: if proving had failed, the previous proof and its key stay usable.
             DeviceKey.retireOthers(context, key)
+            last = null
             val label = ChileCsca.keys.firstOrNull { it.spkiSha256().contentEquals(proof.claim.cscaSha256) }?.label
             val seconds = (System.currentTimeMillis() - started) / 1000.0
             State.Done(proof, seconds, label ?: "desconocida", samplePresentation(key, proof), segment)
         } catch (e: Throwable) {
-            State.Failed("${e.javaClass.simpleName}: ${e.message}")
+            State.Failed(
+                if (e is OutOfMemoryError) "Al teléfono le faltó memoria libre." else "Ocurrió un error al calcular la prueba.",
+                "${e.javaClass.simpleName}: ${e.message}",
+            )
         }
         mutableState.value = result
         return result

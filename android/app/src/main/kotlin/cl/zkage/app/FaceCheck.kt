@@ -29,7 +29,7 @@ object NativeFace {
 
     /**
      * `[face found, similarity, liveness state (0 center, 1 turns, 2 done, 3 confirm), center or
-     * confirm frames, turns done as bits, yaw, pitch]`.
+     * confirm frames, turns done (0 to 2), yaw, pitch, reach toward the side asked or NaN]`.
      */
     external fun frame(handle: Long, rgba: ByteArray, width: Int, height: Int, rotation: Int): FloatArray
 
@@ -52,11 +52,13 @@ class FaceCheck(private val context: Context, private val photo: ChipPhoto) {
             val center: Int?,
             /** After the turns, frames looking straight ahead again; null before. */
             val confirm: Int?,
+            /** Turns done, in the order asked: the person's own right, then their left. */
+            val turnsDone: Int,
             /**
-             * Turns done, by where the nose moved in the unmirrored image: right, then left.
-             * The preview is mirrored, so image right is the user's own left.
+             * How far the head is turned toward the side asked now: 1 or more is enough, below 0
+             * is the wrong side. Null outside the turns or without a face.
              */
-            val turns: List<Boolean>,
+            val reach: Float?,
             val millis: Long,
         ) : State
         data object Matched : State
@@ -115,7 +117,6 @@ class FaceCheck(private val context: Context, private val photo: ChipPhoto) {
             val millis = SystemClock.elapsedRealtime() - started
             // Timing only: no image data, similarity or pose is logged.
             Log.d(TAG, "frame ${it.width}x${it.height} in $millis ms")
-            val turns = out[4].toInt()
             _state.value = when (out[2].toInt()) {
                 2 -> State.Matched
                 else -> State.Running(
@@ -123,7 +124,8 @@ class FaceCheck(private val context: Context, private val photo: ChipPhoto) {
                     similarity = out[1],
                     center = out[3].toInt().takeIf { out[2].toInt() == 0 },
                     confirm = out[3].toInt().takeIf { out[2].toInt() == 3 },
-                    turns = List(2) { i -> turns and (1 shl i) != 0 },
+                    turnsDone = out[4].toInt(),
+                    reach = out[7].takeUnless { it.isNaN() },
                     millis = millis,
                 )
             }
