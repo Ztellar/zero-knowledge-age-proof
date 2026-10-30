@@ -15,26 +15,46 @@ class PresentationTest {
         assertEquals(expected, message.joinToString("") { "%02x".format(it) })
     }
 
+    private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+
+    private fun link(
+        origin: String = "https://shop.example",
+        url: String = "https://shop.example/age/proof?s=8f2a",
+        challenge: String = "82".repeat(32),
+        extra: String = "",
+        v: String = "2",
+    ) = "zkage://present?v=$v&origin=${enc(origin)}&url=${enc(url)}&challenge=$challenge$extra"
+
+    /** The link of `docs/protocol.md`, section 1. */
     @Test
     fun parsesVerifierLink() {
-        val link = "zkage://present?origin=https%3A%2F%2F192.168.1.5%3A8443&session=958eb396284286f0aaef914abd656fca" +
-            "&challenge=${"82".repeat(32)}&pin=${"07".repeat(32)}"
-        val request = Presentation.parse(link)!!
-        assertEquals("https://192.168.1.5:8443", request.origin)
-        assertEquals("https://192.168.1.5:8443/sessions/958eb396284286f0aaef914abd656fca/presentation", request.presentationUrl)
+        val request = Presentation.parse(link())!!
+        assertEquals("https://shop.example", request.origin)
+        assertEquals("https://shop.example/age/proof?s=8f2a", request.url)
         assertArrayEquals(ByteArray(32) { 0x82.toByte() }, request.challenge)
-        assertArrayEquals(ByteArray(32) { 7 }, request.certSha256)
+        assertNull(request.certSha256)
+
+        val pinned = Presentation.parse(link("https://127.0.0.1:8443", "https://127.0.0.1:8443/sessions/ab/presentation", extra = "&pin=${"07".repeat(32)}"))!!
+        assertArrayEquals(ByteArray(32) { 7 }, pinned.certSha256)
     }
 
     @Test
     fun rejectsOtherLinks() {
-        val ok = "challenge=${"82".repeat(32)}&pin=${"07".repeat(32)}&session=ab"
-        assertNull(Presentation.parse("https://example.com/?$ok&origin=https%3A%2F%2Fa.example"))
-        // Plain HTTP, a path that would redirect the POST, a short challenge, a session with a slash.
-        assertNull(Presentation.parse("zkage://present?$ok&origin=http%3A%2F%2Fa.example"))
-        assertNull(Presentation.parse("zkage://present?$ok&origin=https%3A%2F%2Fa.example%2Fx"))
-        assertNull(Presentation.parse("zkage://present?origin=https%3A%2F%2Fa.example&session=ab&challenge=82&pin=${"07".repeat(32)}"))
-        assertNull(Presentation.parse("zkage://present?origin=https%3A%2F%2Fa.example&session=a%2Fb&challenge=${"82".repeat(32)}&pin=${"07".repeat(32)}"))
+        assertNull(Presentation.parse(link().replace("zkage://present", "https://example.com/")))
+        assertNull(Presentation.parse(link(v = "1")))
+        assertNull(Presentation.parse(link().replace("v=2&", "")))
+        // Plain HTTP, an origin with a path, user info or query.
+        assertNull(Presentation.parse(link("http://shop.example", "http://shop.example/p")))
+        assertNull(Presentation.parse(link("https://shop.example/x", "https://shop.example/x/p")))
+        assertNull(Presentation.parse(link("https://u@shop.example", "https://u@shop.example/p")))
+        // A url on another origin, including one that only starts like it.
+        assertNull(Presentation.parse(link(url = "https://evil.example/p")))
+        assertNull(Presentation.parse(link(url = "https://shop.example.evil.example/p")))
+        assertNull(Presentation.parse(link(url = "https://shop.example")))
+        // A short challenge, a bad pin, a parameter twice.
+        assertNull(Presentation.parse(link(challenge = "82")))
+        assertNull(Presentation.parse(link(extra = "&pin=07")))
+        assertNull(Presentation.parse(link(extra = "&challenge=${"00".repeat(32)}")))
     }
 
     @Test

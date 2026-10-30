@@ -14,9 +14,9 @@ import javax.net.ssl.X509TrustManager
 import org.json.JSONObject
 
 /**
- * Answers a verifier's QR (decision 0005): signs its origin and challenge with the device key
- * the stored proof names, and sends the proof, the public key and the signature. Nothing else
- * leaves the phone: no name, RUN or birth date.
+ * Answers a verifier's QR (`docs/protocol.md`, version 2): signs its origin and challenge with
+ * the device key the stored proof names, and sends the proof, the public key and the signature.
+ * Nothing else leaves the phone: no name, RUN or birth date.
  */
 object Presenter {
     const val PROOF_FILE = "age-proof.bin"
@@ -28,6 +28,20 @@ object Presenter {
     }
 
     fun hasProof(context: Context) = File(context.filesDir, PROOF_FILE).exists()
+
+    /** What to tell the person for a rejection code of `docs/protocol.md`, section 5. */
+    fun rejectionText(reason: String): String = when (reason) {
+        "proof" -> "El sitio dice que la prueba no es válida."
+        "untrusted_csca" -> "El sitio no reconoce la firma del Registro Civil de tu cédula."
+        "age_too_low" -> "El sitio pide una edad mayor que la que muestra tu prueba."
+        "future_proof" -> "La fecha de tu prueba es posterior a la del sitio. Revisa la fecha de tu teléfono."
+        "expired_proof" -> "Tu prueba es demasiado antigua para este sitio. Genera una nueva."
+        "chip_not_authenticated" -> "Tu prueba no muestra que el chip de tu cédula estuviera presente. Genera una nueva."
+        "device_key" -> "La prueba no corresponde a la clave de este teléfono. Genera una nueva."
+        "signature" -> "La respuesta no calza con este sitio o este código. Escanea el código otra vez."
+        "malformed_body" -> "El sitio no pudo leer lo que envió el teléfono."
+        else -> "El sitio no la aceptó ($reason)."
+    }
 
     /** Blocking: Keystore, signing and network. */
     fun present(context: Context, request: Presentation.Request): Outcome = try {
@@ -55,10 +69,15 @@ object Presenter {
     }
 
     private fun post(request: Presentation.Request, body: ByteArray): Pair<Int, String> {
-        val connection = URL(request.presentationUrl).openConnection() as HttpsURLConnection
-        connection.sslSocketFactory = SSLContext.getInstance("TLS").apply {
-            init(null, arrayOf(PinnedCertificate(request.certSha256)), null)
-        }.socketFactory
+        val connection = URL(request.url).openConnection() as HttpsURLConnection
+        // Without a pin, the platform's CAs and host name check, as in a browser.
+        request.certSha256?.let { pin ->
+            connection.sslSocketFactory = SSLContext.getInstance("TLS").apply {
+                init(null, arrayOf(PinnedCertificate(pin)), null)
+            }.socketFactory
+        }
+        // The proof goes only to the url on the signed origin, never where a redirect points.
+        connection.instanceFollowRedirects = false
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.connectTimeout = 10_000
@@ -76,8 +95,8 @@ object Presenter {
     }
 
     /**
-     * Trusts exactly the certificate whose SHA-256 the QR carries, instead of any CA: the
-     * verifier's certificate is self-signed, and the QR is how the phone learns it. Hostname
+     * Trusts exactly the certificate whose SHA-256 the QR carries, instead of any CA: for a demo
+     * verifier with a self-signed certificate, where the QR is how the phone learns it. Hostname
      * checking stays on (the certificate names the verifier's IP).
      */
     @SuppressLint("CustomX509TrustManager") // rejects every certificate but the pinned one

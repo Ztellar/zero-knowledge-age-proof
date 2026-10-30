@@ -3,10 +3,10 @@
 How a site asks the app for the age proof, what the phone sends and how it is verified. It is
 meant for building your own verifier without reading the project's code.
 
-**Status (2026-10-30): version 2 specification, not implemented yet.** The app and
-`prover/verifier-web` speak version 1 today, from
-[decision 0005](decisions/0005-web-verifier-with-qr.md). The differences are listed at the
-end. The signed message, the body and the checks are the same in both versions. Version 2
+**Status (2026-10-30): implemented in the app, `prover/verifier-web` and the
+[`zkage-verifier`](../packages/verifier) package, but not yet tried with a phone.** Version 1,
+from [decision 0005](decisions/0005-web-verifier-with-qr.md), is no longer supported. The
+differences are listed at the end. The signed message, the body and the checks are the same in both versions. Version 2
 comes from [decision 0010](decisions/0010-verifier-package-npm.md).
 
 ## Overview
@@ -216,7 +216,7 @@ Expected results (the tests in `presentation.rs` cover them):
   ([decision 0007](decisions/0007-face-match.md)). The site trusts that the proof was made
   by an app that matched the face; it cannot check it.
 
-## Differences from version 1 (what is implemented today)
+## Differences from version 1
 
 | | Version 1 | Version 2 |
 | --- | --- | --- |

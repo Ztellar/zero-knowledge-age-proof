@@ -7,10 +7,10 @@ post-quantum zero-knowledge proof that its holder is over 18. This package check
 in your Node server: you learn that the person is at least the age you ask for, and nothing
 else. No name, ID number, date of birth or photo reaches you.
 
-> **Status (2026-10-30): not published to npm, and the app does not speak this protocol yet.**
-> The package implements version 2 of the [protocol](../../docs/protocol.md); the app still
-> speaks version 1 ([decision 0010](../../docs/decisions/0010-verifier-package-npm.md),
-> step 4). Until then you can try it against the test vectors, not with a phone.
+> **Status (2026-10-30): not published to npm, and not yet tried with a phone.** The package
+> and the app implement version 2 of the [protocol](../../docs/protocol.md), and the package
+> passes its tests against the protocol's test vectors, but no phone has sent it a proof yet
+> ([decision 0010](../../docs/decisions/0010-verifier-package-npm.md), step 6).
 
 ## How it works
 

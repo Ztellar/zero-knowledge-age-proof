@@ -70,11 +70,11 @@ signatures are RSA, and the state chooses them
 
 | Part | Status |
 | --- | --- |
-| Android app | **Works.** Tested with a real ID card on a Galaxy S25: it read the chip, matched the face, made the proof in 92.5 s and the verifier accepted it. Tested only on that phone |
+| Android app | **Works.** Tested with a real ID card on a Galaxy S25: it read the chip, matched the face, made the proof in 92.5 s and the web verifier accepted it (2026-10-29, protocol version 1). Tested only on that phone |
 | Accessible interface (dark mode, text up to 200%, screen reader labels) | Implemented on 2026-10-29. Walked through on the S25 with the real ID card up to making the proof (2026-10-30). Still to test: reading the back of a real ID card, presenting the new proof, and using it with TalkBack |
 | Web verifier | **Reference only.** Works on a local network, for demos |
 | iOS | **Not available.** There is no iPhone code |
-| npm package for businesses | **Built, not published.** It speaks protocol version 2, which the app does not speak yet ([below](#for-businesses-an-npm-package)) |
+| npm package for businesses | **Built, not published, not yet tried with a phone** ([below](#for-businesses-an-npm-package)) |
 | Play Store | Not published |
 | Security audit | Not done |
 
@@ -85,9 +85,10 @@ is to make the post-quantum piece reusable by others
 
 ## For businesses: an npm package
 
-> **Not published to npm yet, and the app does not speak its protocol yet**
-> ([decision 0010](docs/decisions/0010-verifier-package-npm.md)). It can be built from this
-> repository and tried against the test vectors.
+> **Not published to npm yet, and not yet tried with a phone**
+> ([decision 0010](docs/decisions/0010-verifier-package-npm.md)). The app and the package
+> speak the same protocol version, and the package passes its tests against the test
+> vectors, but no phone has sent it a proof yet.
 
 [`zkage-verifier`](packages/verifier) lets a business accept the proof from its own web
 server, without understanding the cryptography or running anything extra:

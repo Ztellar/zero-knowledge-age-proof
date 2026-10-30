@@ -364,7 +364,7 @@ class MainActivity : ComponentActivity() {
             Screen.Presenting -> SendingScreen()
             is Screen.Presented -> when (val o = s.outcome) {
                 is Presenter.Outcome.Accepted -> AcceptedScreen(s.request.origin, ::home)
-                is Presenter.Outcome.Rejected -> NotAcceptedScreen("El sitio rechazó tu prueba", o.reason, null, null, ::home)
+                is Presenter.Outcome.Rejected -> NotAcceptedScreen("El sitio rechazó tu prueba", Presenter.rejectionText(o.reason), null, null, ::home)
                 is Presenter.Outcome.Failed -> NotAcceptedScreen(
                     "No se pudo enviar la prueba",
                     "Revisa tu conexión a internet y que el código no haya vencido.",

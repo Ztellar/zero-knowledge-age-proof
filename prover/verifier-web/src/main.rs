@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use age_core::Date;
-use age_verifier::{verify, Policy, Presentation, Rejection, CHILE_CSCAS};
+use age_verifier::{verify, Policy, Presentation, CHILE_CSCAS};
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -119,9 +119,12 @@ async fn page(State(state): State<Arc<AppState>>) -> Html<String> {
         sessions.retain(|_, s| s.created.elapsed() < SESSION_TTL);
         sessions.insert(id.clone(), Session { challenge, created: Instant::now(), outcome: None });
     }
+    // docs/protocol.md, version 2, with the pin this demo's self-signed certificate needs.
+    let url = format!("{}/sessions/{id}/presentation", state.origin);
     let link = format!(
-        "zkage://present?origin={}&session={id}&challenge={}&pin={}",
+        "zkage://present?v=2&origin={}&url={}&challenge={}&pin={}",
         percent_encode(&state.origin),
+        percent_encode(&url),
         hex::encode(challenge),
         state.cert_sha256,
     );
@@ -175,25 +178,12 @@ async fn present(State(state): State<Arc<AppState>>, Path(id): Path<String>, bod
                 .unwrap_or_default(),
             chip_authenticated: claim.chip_authenticated,
         },
-        Err(rejection) => Outcome::Rejected { reason: reason(rejection).into() },
+        Err(rejection) => Outcome::Rejected { reason: rejection.code().into() },
     };
     if let Some(session) = state.sessions.lock().unwrap().get_mut(&id) {
         session.outcome = Some(outcome.clone());
     }
     Json(outcome).into_response()
-}
-
-fn reason(rejection: Rejection) -> &'static str {
-    match rejection {
-        Rejection::Proof => "La prueba STARK no es válida para este programa",
-        Rejection::UntrustedCsca => "La cédula no está firmada por una CSCA aceptada",
-        Rejection::AgeTooLow => "La prueba no alcanza la edad pedida",
-        Rejection::FutureProof => "La prueba tiene fecha futura",
-        Rejection::ExpiredProof => "La prueba tiene más de 12 meses",
-        Rejection::ChipNotAuthenticated => "La prueba no muestra que el chip de la cédula estuviera presente (Active Authentication)",
-        Rejection::DeviceKey => "La clave del teléfono no es la de la prueba",
-        Rejection::Signature => "La firma no corresponde a este verificador y este desafío",
-    }
 }
 
 /// Today in UTC, from the system clock.

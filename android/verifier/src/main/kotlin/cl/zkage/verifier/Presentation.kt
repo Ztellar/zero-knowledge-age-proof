@@ -7,38 +7,49 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * The phone's side of a presentation (decision 0005), matching `prover/verifier` and
- * `prover/verifier-web`.
+ * The phone's side of a presentation: version 2 of `docs/protocol.md`, matching
+ * `prover/verifier` and the `zkage-verifier` npm package.
  */
 object Presentation {
     private val tag = "zkage-presentation-v1".toByteArray()
 
     /** What the verifier's QR carries. */
     data class Request(
-        /** `https://host:port`; signed into the message, so the answer only works there. */
+        /** `https://host[:port]`; signed into the message, so the answer only works there. */
         val origin: String,
-        val session: String,
+        /** Where to POST the presentation; always on [origin]. */
+        val url: String,
         val challenge: ByteArray,
-        /** SHA-256 of the verifier's TLS certificate: the only one the app will trust. */
-        val certSha256: ByteArray,
-    ) {
-        val presentationUrl: String get() = "$origin/sessions/$session/presentation"
-    }
+        /**
+         * SHA-256 of the verifier's TLS certificate, for a demo with a self-signed one: then it
+         * is the only certificate the app trusts. Null to validate it like a browser.
+         */
+        val certSha256: ByteArray?,
+    )
 
-    /** Parses `zkage://present?origin=…&session=…&challenge=…&pin=…`; null if it is not one. */
+    /**
+     * Parses `zkage://present?v=2&origin=…&url=…&challenge=…[&pin=…]`; null if it is not one,
+     * or if `url` is not on `origin`, so a page cannot get a signature for one site and send it
+     * to another.
+     */
     fun parse(link: String): Request? = runCatching {
         val uri = URI(link)
         if (uri.scheme != "zkage" || uri.host != "present") return null
-        val query = uri.rawQuery.split("&").associate {
+        val pairs = uri.rawQuery.split("&").map {
             val (k, v) = it.split("=", limit = 2)
             k to URLDecoder.decode(v, "UTF-8")
         }
+        val query = pairs.toMap()
+        require(query.size == pairs.size && query["v"] == "2")
         val origin = query.getValue("origin")
         val parsed = URI(origin)
-        require(parsed.scheme == "https" && parsed.path.isNullOrEmpty() && parsed.rawQuery == null)
-        val session = query.getValue("session")
-        require(session.all { it in '0'..'9' || it in 'a'..'f' })
-        Request(origin, session, hex(query.getValue("challenge"), 32), hex(query.getValue("pin"), 32))
+        require(
+            parsed.scheme == "https" && !parsed.host.isNullOrEmpty() && parsed.rawUserInfo == null &&
+                parsed.rawPath.isNullOrEmpty() && parsed.rawQuery == null && parsed.rawFragment == null,
+        )
+        val url = query.getValue("url")
+        require(url.startsWith("$origin/") && URI(url).run { scheme == "https" && rawFragment == null })
+        Request(origin, url, hex(query.getValue("challenge"), 32), query["pin"]?.let { hex(it, 32) })
     }.getOrNull()
 
     /** `"zkage-presentation-v1" || 0x00 || u16 BE origin length || origin || challenge`. */

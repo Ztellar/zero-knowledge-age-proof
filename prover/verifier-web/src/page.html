@@ -38,6 +38,17 @@
 <script>
   const status = document.getElementById("status");
   const detail = document.getElementById("detail");
+  // The reason codes of docs/protocol.md, section 5.
+  const reasons = {
+    proof: "La prueba STARK no es válida para este programa",
+    untrusted_csca: "La cédula no está firmada por una CSCA aceptada",
+    age_too_low: "La prueba no alcanza la edad pedida",
+    future_proof: "La prueba tiene fecha futura",
+    expired_proof: "La prueba tiene más de 12 meses",
+    chip_not_authenticated: "La prueba no muestra que el chip de la cédula estuviera presente (Active Authentication)",
+    device_key: "La clave del teléfono no es la de la prueba",
+    signature: "La firma no corresponde a este verificador y este desafío",
+  };
   async function poll() {
     try {
       const response = await fetch("/sessions/{{SESSION}}");
@@ -58,7 +69,7 @@
       if (result.state === "rejected") {
         status.textContent = "✗ Rechazada";
         status.className = "bad";
-        detail.textContent = result.reason;
+        detail.textContent = reasons[result.reason] ?? result.reason;
         return;
       }
     } catch (e) {}

@@ -1,8 +1,7 @@
 # 0010 — An npm package so any service can verify the proof
 
-Date: 2026-10-30. Status: **accepted, being built** (2026-10-30). Done: the protocol
-specification, the WebAssembly module and the npm package (steps 1 to 3). Not built yet: the
-app and `verifier-web` changes. The package is not published to npm. Chooses option B of [0008](0008-real-use-and-whether-to-continue.md) and
+Date: 2026-10-30. Status: **accepted, being built** (2026-10-30). Done: steps 1 to 5. **Not done: step 6**, so no
+phone has used protocol version 2 yet. The package is not published to npm. Chooses option B of [0008](0008-real-use-and-whether-to-continue.md) and
 changes the protocol of [0005](0005-web-verifier-with-qr.md).
 
 ## Context
@@ -127,8 +126,12 @@ their own verifier without reading the code.
    `curl`: a malformed body is rejected, a second answer gets `409` and an unknown session
    `404`. It has not been tried with a phone, because the app does not speak v2 yet. The
    package would be 467.4 kB compressed, 1.8 MB unpacked, almost all of it the `.wasm`.
-4. The app: v2 link, `url`, normal certificate without `pin`.
-5. `verifier-web` on v2, built on the package or on `verify` as today.
+4. The app: v2 link, `url`, normal certificate without `pin` (done on 2026-10-30). It also
+   refuses redirects, so the proof only goes to the `url` on the signed origin, and turns the
+   reason codes into Spanish text for the person. Covered by the Kotlin link tests; not tried
+   with a phone.
+5. `verifier-web` on v2, built on `verify` as today (done on 2026-10-30). It still pins its
+   self-signed certificate, for the local demo.
 6. Test it end to end with the S25 and the real ID card.
 
 Publishing to npm needs the user's account and is outside this decision: meanwhile the
