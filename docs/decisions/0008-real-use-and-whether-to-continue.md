@@ -1,96 +1,100 @@
-# 0008 — Uso real y si vale la pena seguir
+# 0008 — Real use, and whether it is worth continuing
 
-Fecha: 2026-10-29. Estado: **propuesta, esperando la elección del usuario**. Reabre en
-parte la [0003](0003-android-app-post-quantum-proof.md).
+Date: 2026-10-29. Status: **option B accepted** on 2026-10-30, when the user asked to start
+with an npm package so other services can verify the proof
+([0010](0010-verifier-package-npm.md)). Partly reopens
+[0003](0003-android-app-post-quantum-proof.md).
 
-## Contexto
+## Context
 
-La 0003 dejó el proyecto como portfolio porque "como negocio no compite" con ZKPassport.
-Desde entonces cambiaron dos cosas:
+0003 left the project as a portfolio piece because "as a business it does not compete" with
+ZKPassport. Two things have changed since:
 
-- **La primera versión funciona.** Lee la cédula real, prueba con Active Authentication en
-  92,5 s en el S25, y el verificador web la aceptó. La 0003 decía que el resto "se retoma
-  si la primera versión funciona".
-- **El usuario pregunta si sirve para uso real.** El rediseño accesible del 2026-10-29
-  apunta a público general.
+- **The first version works.** It reads the real ID card, proves with Active Authentication
+  in 92.5 s on the S25, and the web verifier accepted it. 0003 said the rest "comes back if
+  the first version works".
+- **The user asks whether it can serve real use.** The accessible redesign of 2026-10-29
+  aims at the general public.
 
-Hay que responder dos preguntas: si esto puede servir de verdad, y si vale la pena seguir.
+Two questions need answering: whether this can really be useful, and whether it is worth
+continuing.
 
-## ¿Puede servir de verdad?
+## Can it really be useful?
 
-**Técnicamente, sí.** La cadena completa ya funciona con una cédula real: lectura, firma del
-Registro Civil, chip original, cara, prueba y verificador. Lo que falta para que una
-persona cualquiera lo use no es criptografía:
+**Technically, yes.** The whole chain already works with a real ID card: reading, the Civil
+Registry's signature, original chip, face, proof and verifier. What is missing for anyone to
+use it is not cryptography:
 
-| Falta | Por qué importa | Cómo se sabría |
+| Missing | Why it matters | How we would know |
 | --- | --- | --- |
-| **Alguien que verifique** | Sin un comercio o sitio que acepte la prueba, la app no le sirve a nadie | Un verificador concreto dispuesto a probarla |
-| **Teléfonos comunes** | `SegmentSize` usa el 40% de la RAM. Con 6 GB (2,4 GB de presupuesto) cae en 2^17: 366 s medidos en el S25. En una CPU más lenta sería más; no está medido | Medirlo en un teléfono de gama media |
-| **iPhone** | Hoy sólo hay Android | — |
-| **Claves del Estado de fuente oficial** | Las CSCA vienen del registro de ZKPassport (`ChileCsca.kt`). Chile es participante del ICAO PKD desde el 19/07/2024, y el PKD se descarga sin cuenta aceptando términos que **prohíben republicar** su contenido sin permiso escrito de la OACI (revisado el 2026-10-29). No se encontró una publicación del Registro Civil. Comparadas con la lista maestra de la OACI, las 4 claves de la app son las oficiales, pero **falta una quinta, de 2026** ([detalle](../measurements/chile-key-sizes.md)) | Pedir permiso a la OACI o pedir las CSCA al Registro Civil por Ley de Transparencia |
-| **Revisión de seguridad independiente** | Nadie fuera del proyecto ha revisado el programa de la prueba | — |
-| **Enlazabilidad** | Dos verificadores pueden saber que es la misma prueba ([0004](0004-prove-once-present-many.md)) | — |
+| **Someone who verifies** | Without a shop or site that accepts the proof, the app is useless to anyone | A concrete verifier willing to try it |
+| **Ordinary phones** | `SegmentSize` uses 40% of RAM. With 6 GB (a 2.4 GB budget) it lands on 2^17: 366 s measured on the S25. On a slower CPU it would be more; not measured | Measure it on a mid-range phone |
+| **iPhone** | There is only Android today | — |
+| **State keys from an official source** | The CSCAs come from ZKPassport's registry (`ChileCsca.kt`). Chile has been an ICAO PKD participant since 19/07/2024, and the PKD downloads without an account by accepting terms that **forbid republishing** its content without written ICAO permission (checked on 2026-10-29). No Civil Registry publication was found. Compared with the ICAO master list, the app's 4 keys are the official ones, but **a fifth one, from 2026, is missing** ([details](../measurements/chile-key-sizes.md)) | Ask ICAO for permission, or request the CSCAs from the Civil Registry under the Transparency Law |
+| **Independent security review** | Nobody outside the project has reviewed the proof's program | — |
+| **Linkability** | Two verifiers can tell it is the same proof ([0004](0004-prove-once-present-many.md)) | — |
 
-ZKPassport, Self y la librería experimental de la Comisión Europea
-(`av-lib-android-zkp-age-icao`) ya hacen esto con curvas elípticas. Lo que este proyecto
-tiene distinto es la prueba basada sólo en funciones hash. Eso importa cuando los Estados
-firmen documentos con algoritmos post-cuánticos, y la OACI recién está trabajando en ello.
+ZKPassport, Self and the European Commission's experimental library
+(`av-lib-android-zkp-age-icao`) already do this with elliptic curves. What this project does
+differently is the proof based only on hash functions. That matters once states sign
+documents with post-quantum algorithms, and ICAO has only started working on it.
 
-## Opciones
+## Options
 
-### A. Terminar y cerrar
+### A. Finish and close
 
-Terminar el rediseño, publicar el resultado y un artículo, y dejar el proyecto como
-portfolio.
+Finish the redesign, publish the result and an article, and leave the project as a portfolio
+piece.
 
-- Cuesta: lo ya aprobado.
-- Se rompe cuando: un verificador real o una institución pide usarlo.
+- Costs: what is already approved.
+- Breaks when: a real verifier or an institution asks to use it.
 
-### B. Pieza abierta para otros (recomendada)
+### B. An open piece for others (recommended)
 
-Terminar el rediseño y convertir lo distintivo en algo que otros puedan reusar:
+Finish the redesign and turn what is distinctive into something others can reuse:
 
-- una especificación del protocolo de verificación, con vectores de prueba;
-- la prueba post-cuántica como librería;
-- una demostración de punta a punta con una cédula de prueba firmada con ML-DSA.
+- a specification of the verification protocol, with test vectors;
+- the post-quantum proof as a library;
+- an end-to-end demo with a test ID card signed with ML-DSA.
 
-- Cuesta: semanas de trabajo propio, sin gasto.
-- Se rompe cuando: nadie adopta la especificación ni la librería, o la migración post-cuántica
-  de la OACI se aleja tanto que nadie lo necesita todavía.
+- Costs: weeks of our own work, no spending.
+- Breaks when: nobody adopts the specification or the library, or ICAO's post-quantum
+  migration recedes so far that nobody needs it yet.
 
-### C. Producto de uso público
+### C. A public-use product
 
-Play Store, soporte, iPhone, revisión de seguridad y cumplimiento como responsable de datos
-bajo la Ley 21.719. Además, un piloto con un verificador real en Chile.
+Play Store, support, iPhone, a security review, and compliance as a data controller under
+Law 21.719. Plus a pilot with a real verifier in Chile.
 
-- Cuesta: meses y dinero (auditoría, cuentas de desarrollador, soporte). Compite con
-  productos que ya existen y tienen equipos.
-- Se rompe cuando: no aparece un verificador dispuesto a aceptarlo.
+- Costs: months and money (audit, developer accounts, support). It competes with products
+  that already exist and have teams.
+- Breaks when: no verifier willing to accept it shows up.
 
-Hay una cuarta opción que no propongo: competir comercialmente con ZKPassport. La 0003 ya la
-descartó, y lo único que cambió es que la versión funciona, no el mercado.
+There is a fourth option I do not propose: competing commercially with ZKPassport. 0003
+already rejected it, and the only thing that changed is that the version works, not the
+market.
 
-## Recomendación
+## Recommendation
 
-**B.** En términos del proyecto: la app ya demuestra que la idea funciona con una cédula
-real. Lo que la vuelve un avance no es tener más usuarios, sino que otros puedan reusar la
-parte post-cuántica, y eso no depende de convencer a ningún comercio. El rediseño accesible
-sigue valiendo como demostración que cualquiera puede probar.
+**B.** In the project's terms: the app already shows that the idea works with a real ID card.
+What makes it an advance is not having more users, but that others can reuse the
+post-quantum part, and that does not depend on convincing any shop. The accessible redesign
+still counts as a demo anyone can try.
 
-C sólo se justifica con un verificador concreto. Su disparador está abajo.
+C is only justified with a concrete verifier. Its trigger is below.
 
-## Qué la invalidaría
+## What would invalidate it
 
-- **Un verificador real se compromete a usarlo** (un comercio, un evento, una institución).
-  Ahí conviene C, empezando por un piloto.
-- **En un teléfono de gama media la prueba tarda más de 10 minutos o se cae por memoria.**
-  Ahí el uso público no es viable con este probador, sea cual sea la opción, y gana A hasta
-  que cambie el probador.
-- **ZKPassport, Self o la UE publican una prueba post-cuántica para documentos con chip.**
-  La diferencia de B desaparece y gana A.
+- **A real verifier commits to using it** (a shop, an event, an institution). Then C is the
+  better fit, starting with a pilot.
+- **On a mid-range phone the proof takes more than 10 minutes or crashes for lack of
+  memory.** Then public use is not viable with this prover, whatever the option, and A wins
+  until the prover changes.
+- **ZKPassport, Self or the EU publish a post-quantum proof for chip documents.** B's
+  difference disappears and A wins.
 
-## Costo de equivocarse
+## Cost of being wrong
 
-Bajo y reversible: todo es open source y nada impide pasar de B a C. El riesgo real es
-pasar meses en C sin un verificador, y se notaría porque no habría nadie con quien probar
-el piloto.
+Low and reversible: everything is open source and nothing prevents moving from B to C. The
+real risk is spending months on C without a verifier, and it would show because there would
+be nobody to run the pilot with.
