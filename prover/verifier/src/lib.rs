@@ -36,6 +36,34 @@ pub struct Presentation {
     pub signature: Vec<u8>,
 }
 
+impl Presentation {
+    /// Parses the body the phone sends (`docs/protocol.md`, section 4): receipt, public key
+    /// and signature, each preceded by its length as a little-endian `u32`, and nothing after
+    /// them. None if it has another shape.
+    pub fn from_body(body: &[u8]) -> Option<Self> {
+        let mut rest = body;
+        let mut field = || -> Option<Vec<u8>> {
+            let (len, tail) = rest.split_first_chunk::<4>()?;
+            let (value, tail) = tail.split_at_checked(u32::from_le_bytes(*len) as usize)?;
+            rest = tail;
+            Some(value.to_vec())
+        };
+        let presentation = Presentation { receipt: field()?, device_key_spki: field()?, signature: field()? };
+        rest.is_empty().then_some(presentation)
+    }
+
+    /// The body the phone sends for this presentation; the inverse of [`Self::from_body`].
+    pub fn to_body(&self) -> Vec<u8> {
+        let mut body = Vec::with_capacity(12 + self.receipt.len() + self.device_key_spki.len() + self.signature.len());
+        for field in [&self.receipt, &self.device_key_spki, &self.signature] {
+            let len = u32::try_from(field.len()).expect("field longer than 4 GiB");
+            body.extend_from_slice(&len.to_le_bytes());
+            body.extend_from_slice(field);
+        }
+        body
+    }
+}
+
 /// What this verifier accepts.
 pub struct Policy {
     /// SHA-256 of each trusted CSCA SubjectPublicKeyInfo.
@@ -48,7 +76,7 @@ pub struct Policy {
     pub require_chip_authentication: bool,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rejection {
     /// The receipt does not decode or does not verify against the project's image ID.
     Proof,
@@ -62,6 +90,22 @@ pub enum Rejection {
     /// The public key is malformed, not ML-DSA-65, or not the one the proof names.
     DeviceKey,
     Signature,
+}
+
+impl Rejection {
+    /// The reason code of `docs/protocol.md`, section 5.
+    pub fn code(self) -> &'static str {
+        match self {
+            Rejection::Proof => "proof",
+            Rejection::UntrustedCsca => "untrusted_csca",
+            Rejection::AgeTooLow => "age_too_low",
+            Rejection::FutureProof => "future_proof",
+            Rejection::ExpiredProof => "expired_proof",
+            Rejection::ChipNotAuthenticated => "chip_not_authenticated",
+            Rejection::DeviceKey => "device_key",
+            Rejection::Signature => "signature",
+        }
+    }
 }
 
 /// The message the phone signs: tag, origin and challenge, so a signature made for one

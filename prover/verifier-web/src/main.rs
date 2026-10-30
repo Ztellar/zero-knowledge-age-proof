@@ -153,7 +153,7 @@ async fn present(State(state): State<Arc<AppState>>, Path(id): Path<String>, bod
             _ => return (StatusCode::NOT_FOUND, "unknown or expired session").into_response(),
         }
     };
-    let Some(presentation) = parse(&body) else {
+    let Some(presentation) = Presentation::from_body(&body) else {
         return (StatusCode::BAD_REQUEST, "malformed presentation").into_response();
     };
 
@@ -181,18 +181,6 @@ async fn present(State(state): State<Arc<AppState>>, Path(id): Path<String>, bod
         session.outcome = Some(outcome.clone());
     }
     Json(outcome).into_response()
-}
-
-fn parse(body: &[u8]) -> Option<Presentation> {
-    let mut rest = body;
-    let mut field = || -> Option<Vec<u8>> {
-        let (len, tail) = rest.split_first_chunk::<4>()?;
-        let (value, tail) = tail.split_at_checked(u32::from_le_bytes(*len) as usize)?;
-        rest = tail;
-        Some(value.to_vec())
-    };
-    let presentation = Presentation { receipt: field()?, device_key_spki: field()?, signature: field()? };
-    rest.is_empty().then_some(presentation)
 }
 
 fn reason(rejection: Rejection) -> &'static str {

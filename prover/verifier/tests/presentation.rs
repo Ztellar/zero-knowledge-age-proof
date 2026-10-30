@@ -122,3 +122,47 @@ fn seed_derivation_matches_kotlin() {
     println!("spki sha256 for seed 00..1f: {hex}");
     assert_eq!(hex, include_str!("seed-00-1f.sha256").trim());
 }
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The test vectors of `docs/protocol.md`: the body the phone sends for this file's
+/// presentation, the proof's journal and the program's image ID. `WRITE_VECTORS=1` rewrites
+/// them, which is needed whenever `receipt.bin` is regenerated.
+#[test]
+fn protocol_vectors() {
+    let p = presentation();
+    let body = p.to_body();
+    let parsed = Presentation::from_body(&body).unwrap();
+    assert!(parsed.receipt == p.receipt && parsed.device_key_spki == p.device_key_spki && parsed.signature == p.signature);
+    assert!(Presentation::from_body(&body[..body.len() - 1]).is_none());
+    assert!(Presentation::from_body(&[body.as_slice(), &[0]].concat()).is_none());
+    let receipt: risc0_zkvm::Receipt = bincode::deserialize(&p.receipt).unwrap();
+    let image_id = risc0_zkvm::sha::Digest::from(methods::AGE_GUEST_ID);
+    println!(
+        "receipt {} B, device key {} B, signature {} B, body {} B, journal {} B",
+        p.receipt.len(),
+        p.device_key_spki.len(),
+        p.signature.len(),
+        body.len(),
+        receipt.journal.bytes.len(),
+    );
+    let vectors = [
+        ("presentation-body.bin", body),
+        ("journal.hex", format!("{}\n", hex(&receipt.journal.bytes)).into_bytes()),
+        ("image-id.hex", format!("{}\n", hex(image_id.as_bytes())).into_bytes()),
+    ];
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/vectors");
+    if std::env::var_os("WRITE_VECTORS").is_some() {
+        fs::create_dir_all(&dir).unwrap();
+        for (name, bytes) in &vectors {
+            fs::write(dir.join(name), bytes).unwrap();
+        }
+    }
+    for (name, bytes) in &vectors {
+        let path = dir.join(name);
+        let stored = fs::read(&path).unwrap_or_else(|e| panic!("{}: {e} (run with WRITE_VECTORS=1)", path.display()));
+        assert!(stored == *bytes, "{name} is stale: run with WRITE_VECTORS=1");
+    }
+}
