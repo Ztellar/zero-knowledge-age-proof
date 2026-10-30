@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "facematch", "ffi", "host", "methods", "verifier", "verifier-web"]
+members = ["core", "facematch", "ffi", "host", "methods", "verifier", "verifier-wasm", "verifier-web"]
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]

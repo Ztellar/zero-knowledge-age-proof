@@ -1,0 +1,19 @@
+[package]
+name = "age-verifier-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "age-verifier as a WebAssembly module with plain exported functions, for the npm package of decision 0010"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+age-core = { path = "../core" }
+age-verifier = { path = "../verifier" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = "0.4"
+
+[dev-dependencies]
+sha2 = "=0.10.9"

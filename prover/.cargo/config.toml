@@ -1,0 +1,4 @@
+# getrandom has no randomness source on wasm32-unknown-unknown. verifier-wasm supplies one
+# that always fails: verifying a presentation needs no randomness.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="custom"']

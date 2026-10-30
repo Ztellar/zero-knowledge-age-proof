@@ -71,6 +71,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "age-verifier-wasm"
+version = "0.1.0"
+dependencies = [
+ "age-core",
+ "age-verifier",
+ "getrandom 0.4.3",
+ "sha2",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
